@@ -1,0 +1,36 @@
+name:            aivika-distributed
+version:         0.1
+synopsis:        Distributed simulation library
+description:
+    This package extends the Aivika library with facilities for running distributed simulations.
+    .
+category:        Simulation
+license:         BSD3
+license-file:    LICENSE
+copyright:       (c) 2015. David Sorokin <david.sorokin@gmail.com>
+author:          David Sorokin
+maintainer:      David Sorokin <david.sorokin@gmail.com>
+homepage:        http://www.aivikasoft.com/en/products/aivika.html
+cabal-version:   >= 1.6
+build-type:      Simple
+tested-with:     GHC == 7.10.1
+
+library
+
+    exposed-modules: Simulation.Aivika.Distributed
+                     Simulation.Aivika.Distributed.Optimistic
+                     Simulation.Aivika.Distributed.Optimistic.TimeServer
+
+    other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+
+    build-depends:   base >= 3 && < 6,
+                     aivika-transformers >= 4.0.3
+
+    extensions:      MultiParamTypeClasses
+
+    ghc-options:     -O2
+
+source-repository head
+
+    type:     git
+    location: https://github.com/dsorokin/aivika-distributed
