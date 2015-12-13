@@ -22,6 +22,7 @@ import Control.Monad
 import Simulation.Aivika.Vector
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Simulation
+import Simulation.Aivika.Trans.Dynamics
 import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Trans.Signal
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
@@ -78,8 +79,10 @@ createInputMessageQueue rollbackPre rollbackPost source =
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
 enqueueMessage q m =
   do i0 <- liftCompIOUnsafe $ readIORef (inputMessageIndex q)
+     t0 <- liftDynamics time
+     let t = messageReceiveTime m
      (i, f) <- findAntiMessage q m
-     if i < i0
+     if i < i0 || t < t0
        then do i' <- leftMessageIndex q m i
                let t' = messageReceiveTime m
                inputMessageRollbackPre q t'
