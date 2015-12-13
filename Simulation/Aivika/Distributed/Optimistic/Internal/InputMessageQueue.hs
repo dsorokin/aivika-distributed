@@ -114,14 +114,14 @@ leftMessageIndex q m i
                           else leftMessageIndex q m i'
 
 -- | Find an anti- message and return an index with 'True'; otherwise,
--- return the greatest index within the current receive time with 'False'.
+-- return the rightmost index within the current receive time with 'False'.
 findAntiMessage :: InputMessageQueue -> Message -> Event DIO (Int, Bool)
 findAntiMessage q m =
   do right <- lookupRightMessageIndex q m
      if right < 0
        then return (- right - 1, False)
        else let loop i
-                  | i < 0    = return (right, False)
+                  | i < 0     = return (right, False)
                   | otherwise =
                     do item <- liftCompIOUnsafe $ readVector (inputMessages q) i
                        let m' = itemMessage item
