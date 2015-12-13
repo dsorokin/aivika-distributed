@@ -86,7 +86,10 @@ enqueueMessage q m =
        then do i' <- leftMessageIndex q m i
                let t' = messageReceiveTime m
                inputMessageRollbackPre q t'
-               liftCompIOUnsafe $ writeIORef (inputMessageIndex q) i'
+               n <- liftCompIOUnsafe $ vectorCount (inputMessages q)
+               forM_ [i' .. n-1] $ unregisterMessage q
+               liftCompIOUnsafe $
+                 writeIORef (inputMessageIndex q) i'
                if f
                  then annihilateMessage q i
                  else insertMessage q m i
@@ -156,6 +159,15 @@ registerMessage q i =
              unless (messageAntiToggle m) $
                triggerSignal (inputMessageSource q) m
      liftCompIOUnsafe $ writeIORef (itemEvent item) (Just e)
+
+-- | Unregister a message at the specified index.
+unregisterMessage :: InputMessageQueue -> Int -> Event DIO ()
+unregisterMessage q i =
+  do item <- liftCompIOUnsafe $ readVector (inputMessages q) i
+     x <- liftCompIOUnsafe $ readIORef (itemEvent item)
+     case x of
+       Nothing -> return ()
+       Just e  -> cancelEvent e
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> Event DIO ()
