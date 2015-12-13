@@ -98,7 +98,7 @@ enqueueMessage q m =
             else do insertMessage q m i
                     registerMessage q i
 
--- | Return the previous index for the current message.
+-- | Return the leftmost index for the current message.
 leftMessageIndex :: InputMessageQueue -> Message -> Int -> Event DIO Int
 leftMessageIndex q m i
   | i == 0    = return 0
