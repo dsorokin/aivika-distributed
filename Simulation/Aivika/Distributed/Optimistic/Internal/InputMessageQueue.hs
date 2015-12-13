@@ -86,10 +86,10 @@ enqueueMessage q m =
        then do i' <- leftMessageIndex q m i
                let t' = messageReceiveTime m
                inputMessageRollbackPre q t'
-               n <- liftCompIOUnsafe $ vectorCount (inputMessages q)
-               forM_ [i' .. n-1] $ unregisterMessage q
                liftCompIOUnsafe $
                  writeIORef (inputMessageIndex q) i'
+               n <- liftCompIOUnsafe $ vectorCount (inputMessages q)
+               forM_ [i' .. n-1] $ unregisterMessage q
                if f
                  then annihilateMessage q i
                  else insertMessage q m i
