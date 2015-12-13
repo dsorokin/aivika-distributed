@@ -21,10 +21,16 @@ library
                      Simulation.Aivika.Distributed.Optimistic
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 
-    other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+    other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+                     Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Message
+                     Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
     build-depends:   base >= 3 && < 6,
-                     aivika-transformers >= 4.0.3
+                     bytestring >= 0.10.4.0,
+                     distributed-process >= 0.5.5.1,
+                     aivika >= 4.3.1,
+                     aivika-transformers >= 4.3.1
 
     extensions:      MultiParamTypeClasses
 

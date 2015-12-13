@@ -7,7 +7,7 @@
 -- Stability  : experimental
 -- Tested with: GHC 7.10.3
 --
--- This module the Time Server that coordinates the global simulation time.
+-- This module defines the Time Server that coordinates the global simulation time.
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServer,
