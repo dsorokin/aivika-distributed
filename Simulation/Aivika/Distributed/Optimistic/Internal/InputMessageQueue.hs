@@ -175,9 +175,9 @@ lookupRightMessageIndex' q m left right =
        let m' = itemMessage item
            t  = messageReceiveTime m
            t' = messageReceiveTime m'
-       if t' < t
+       if t' > t
          then lookupRightMessageIndex' q m left (index - 1)
-         else if t' > t
+         else if t' < t
               then lookupRightMessageIndex' q m (index + 1) right
               else if index == right
                    then return right
