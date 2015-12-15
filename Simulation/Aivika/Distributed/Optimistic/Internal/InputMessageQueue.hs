@@ -25,8 +25,10 @@ import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Dynamics
 import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Trans.Signal
+
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
 data InputMessageQueue =

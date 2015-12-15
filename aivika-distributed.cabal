@@ -19,6 +19,7 @@ library
 
     exposed-modules: Simulation.Aivika.Distributed
                      Simulation.Aivika.Distributed.Optimistic
+                     Simulation.Aivika.Distributed.Optimistic.DIO
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -27,6 +28,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
     build-depends:   base >= 3 && < 6,
+                     mtl >= 2.1.1,
                      bytestring >= 0.10.4.0,
                      distributed-process >= 0.5.5.1,
                      aivika >= 4.3.1,
