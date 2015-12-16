@@ -25,6 +25,7 @@ library
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.DIO
                      Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.Message
+                     Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
     build-depends:   base >= 3 && < 6,

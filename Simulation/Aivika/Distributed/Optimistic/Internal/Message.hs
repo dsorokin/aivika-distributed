@@ -11,6 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
+        antiMessage,
         antiMessages) where
 
 import Data.ByteString
@@ -33,6 +34,10 @@ data Message =
             messageData :: ByteString
             -- ^ The message data.
           }
+
+-- | Return an anti-message.
+antiMessage :: Message -> Message
+antiMessage x = x { messageAntiToggle = not (messageAntiToggle x) }
 
 -- | Whether two messages are anti-messages.
 antiMessages :: Message -> Message -> Bool

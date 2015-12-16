@@ -23,6 +23,7 @@ import Simulation.Aivika.Trans.QueueStrategy
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
+import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 
 instance MonadDES DIO
 
