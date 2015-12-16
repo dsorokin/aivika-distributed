@@ -10,12 +10,10 @@
 -- This module defines a distributed computation based on 'IO'.
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
-       (DIO(..),
-        liftIOUnsafe) where
+       (DIO(..)) where
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.Trans
 import Control.Distributed.Process (Process)
 
 -- | The distributed computation based on 'IO'.
@@ -36,7 +34,3 @@ instance Applicative DIO where
 instance Functor DIO where
   
   fmap f (DIO m) = DIO $ fmap f m 
-
--- | Lift 'IO' computation in an unsafe manner.
-liftIOUnsafe :: IO a -> DIO a
-liftIOUnsafe = DIO . liftIO
