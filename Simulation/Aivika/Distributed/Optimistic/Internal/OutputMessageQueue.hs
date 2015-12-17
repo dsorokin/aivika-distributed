@@ -59,14 +59,14 @@ sendMessage q m =
        do m' <- liftIOUnsafe $ readVector (outputMessages q) (n - 1)
           when (messageSendTime m' > messageSendTime m) $
             error "A new output message comes from the past: sendMessage."
+     liftComp $ deliverMessage m
      liftIOUnsafe $ appendVector (outputMessages q) m
-     doSendMessage q m
 
 -- | Rollback the messages till the specified time including that one.
 rollbackMessages :: OutputMessageQueue -> Double -> Event DIO ()
 rollbackMessages q t =
   do ms <- extractMessagesToRollback q t
-     forM_ ms (doSendMessage q . antiMessage)
+     forM_ ms (liftComp . deliverMessage . antiMessage)
                  
 -- | Return the messages to roolback by the specified time.
 extractMessagesToRollback :: OutputMessageQueue -> Double -> Event DIO [Message]
@@ -81,7 +81,3 @@ extractMessagesToRollback q t =
                        loop (i - 1) (m : acc)
   in do n <- liftIOUnsafe $ vectorCount (outputMessages q)
         loop (n - 1) []
-                 
--- | Do send a message on low level.
-doSendMessage :: OutputMessageQueue -> Message -> Event DIO ()
-doSendMessage = undefined

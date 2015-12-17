@@ -12,12 +12,15 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
-        antiMessages) where
+        antiMessages,
+        deliverMessage) where
 
 import Data.ByteString
 
 import Control.Distributed.Process (ProcessId)
 import Control.Distributed.Process.Serializable
+
+import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 -- | Represents a message.
 data Message =
@@ -48,3 +51,7 @@ antiMessages x y =
   (messageReceiver x == messageReceiver y) &&
   (messageAntiToggle x /= messageAntiToggle y) &&
   (messageData x == messageData y)
+
+-- | Deliver the message on low level.
+deliverMessage :: Message -> DIO ()
+deliverMessage = undefined
