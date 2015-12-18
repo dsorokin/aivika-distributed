@@ -66,7 +66,7 @@ sendMessage q m =
 rollbackMessages :: OutputMessageQueue -> Double -> Event DIO ()
 rollbackMessages q t =
   do ms <- extractMessagesToRollback q t
-     forM_ ms (liftComp . deliverMessage . antiMessage)
+     forM_ ms (liftComp . recallMessage . antiMessage)
                  
 -- | Return the messages to roolback by the specified time.
 extractMessagesToRollback :: OutputMessageQueue -> Double -> Event DIO [Message]

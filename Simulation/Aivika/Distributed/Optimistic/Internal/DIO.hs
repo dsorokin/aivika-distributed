@@ -25,8 +25,8 @@ newtype DIO a = DIO { runDIO :: DIOParams -> Process a
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioParamDeliveryTimeout :: Int
-              -- The timeout in milliseconds for the delivery operation.
+  DIOParams { dioParamRecallTimeout :: Int
+              -- The timeout in milliseconds for the recall operation.
             }
 
 instance Monad DIO where
@@ -55,4 +55,4 @@ instance Functor DIO where
 -- | The default 'DIO' parameters.
 defaultDIOParams :: DIOParams
 defaultDIOParams =
-  DIOParams { dioParamDeliveryTimeout = 60000 }
+  DIOParams { dioParamRecallTimeout = 60000 }

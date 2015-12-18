@@ -13,7 +13,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
         antiMessages,
-        deliverMessage) where
+        deliverMessage,
+        recallMessage) where
 
 import Data.ByteString
 
@@ -58,3 +59,8 @@ antiMessages x y =
 -- | Deliver the message on low level.
 deliverMessage :: Message -> DIO ()
 deliverMessage = undefined
+
+-- | Similar to 'deliverMessage' but has a timeout whithin which
+-- the delivery can be repeated in case of failure.
+recallMessage :: Message -> DIO ()
+recallMessage = undefined
