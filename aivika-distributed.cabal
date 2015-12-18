@@ -27,6 +27,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Internal.Message
                      Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+                     Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 
     build-depends:   base >= 3 && < 6,
                      mtl >= 2.1.1,
