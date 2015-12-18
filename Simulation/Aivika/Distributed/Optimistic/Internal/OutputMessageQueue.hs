@@ -54,6 +54,8 @@ sendMessage :: OutputMessageQueue -> Message -> Event DIO ()
 sendMessage q m =
   do when (messageSendTime m > messageReceiveTime m) $
        error "The Send time cannot be greater than the Receive message time: sendMessage"
+     when (messageAntiToggle m) $
+       error "Cannot directly send the anti-message: sendMessage"
      n <- liftIOUnsafe $ vectorCount (outputMessages q)
      when (n > 0) $
        do m' <- liftIOUnsafe $ readVector (outputMessages q) (n - 1)
