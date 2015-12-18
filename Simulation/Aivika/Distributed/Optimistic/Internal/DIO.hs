@@ -26,7 +26,7 @@ newtype DIO a = DIO { runDIO :: DIOParams -> Process a
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
   DIOParams { dioParamRecallTimeout :: Int
-              -- The timeout in milliseconds for the recall operation.
+              -- The timeout in milliseconds for delivering an anti-message.
             }
 
 instance Monad DIO where
