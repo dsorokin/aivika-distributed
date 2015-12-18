@@ -24,7 +24,9 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 -- | Represents a message.
 data Message =
-  Message { messageSendTime :: Double,
+  Message { messageSequenceNo :: Int,
+            -- ^ The sequence number.
+            messageSendTime :: Double,
             -- ^ The send time.
             messageReceiveTime :: Double,
             -- ^ The receive time.
@@ -36,7 +38,7 @@ data Message =
             -- ^ Whether this is an anti-message.
             messageData :: ByteString
             -- ^ The message data.
-          }
+          } deriving (Eq, Ord, Show)
 
 -- | Return an anti-message.
 antiMessage :: Message -> Message
@@ -45,6 +47,7 @@ antiMessage x = x { messageAntiToggle = not (messageAntiToggle x) }
 -- | Whether two messages are anti-messages.
 antiMessages :: Message -> Message -> Bool
 antiMessages x y =
+  (messageSequenceNo x == messageSequenceNo y) &&
   (messageSendTime x == messageSendTime y) &&
   (messageReceiveTime x == messageReceiveTime y) &&
   (messageSender x == messageSender y) &&

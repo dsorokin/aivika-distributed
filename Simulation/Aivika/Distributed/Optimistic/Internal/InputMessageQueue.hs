@@ -78,31 +78,34 @@ createInputMessageQueue rollbackPre rollbackPost source =
                                 inputMessages = ms,
                                 inputMessageIndex = r }
 
--- | Enqueue a new message.
+-- | Enqueue a new message ignoring the duplicated messages.
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
 enqueueMessage q m =
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
      t0 <- liftDynamics time
      let t = messageReceiveTime m
      (i, f) <- findAntiMessage q m
-     if i < i0 || t < t0
-       then do i' <- leftMessageIndex q m i
-               let t' = messageReceiveTime m
-               inputMessageRollbackPre q t'
-               liftIOUnsafe $
-                 writeIORef (inputMessageIndex q) i'
-               n <- liftIOUnsafe $ vectorCount (inputMessages q)
-               forM_ [i' .. n-1] $ unregisterMessage q
-               if f
-                 then annihilateMessage q i
-                 else insertMessage q m i
-               n <- liftIOUnsafe $ vectorCount (inputMessages q)
-               forM_ [i' .. n-1] $ registerMessage q
-               inputMessageRollbackPost q t'
-       else if f
-            then annihilateMessage q i
-            else do insertMessage q m i
-                    registerMessage q i
+     case f of
+       Nothing -> return ()
+       Just f  ->
+         if i < i0 || t < t0
+         then do i' <- leftMessageIndex q m i
+                 let t' = messageReceiveTime m
+                 inputMessageRollbackPre q t'
+                 liftIOUnsafe $
+                   writeIORef (inputMessageIndex q) i'
+                 n <- liftIOUnsafe $ vectorCount (inputMessages q)
+                 forM_ [i' .. n-1] $ unregisterMessage q
+                 if f
+                   then annihilateMessage q i
+                   else insertMessage q m i
+                 n <- liftIOUnsafe $ vectorCount (inputMessages q)
+                 forM_ [i' .. n-1] $ registerMessage q
+                 inputMessageRollbackPost q t'
+         else if f
+              then annihilateMessage q i
+              else do insertMessage q m i
+                      registerMessage q i
 
 -- | Return the leftmost index for the current message.
 leftMessageIndex :: InputMessageQueue -> Message -> Int -> Event DIO Int
@@ -121,13 +124,15 @@ leftMessageIndex q m i
 
 -- | Find an anti- message and return an index with 'True'; otherwise,
 -- return the rightmost index within the current receive time with 'False'.
-findAntiMessage :: InputMessageQueue -> Message -> Event DIO (Int, Bool)
+--
+-- The second result is 'Nothing' if the message is duplicated.
+findAntiMessage :: InputMessageQueue -> Message -> Event DIO (Int, Maybe Bool)
 findAntiMessage q m =
   do right <- lookupRightMessageIndex q m
      if right < 0
-       then return (- right - 1, False)
+       then return (- right - 1, Just False)
        else let loop i
-                  | i < 0     = return (right, False)
+                  | i < 0     = return (right, Just False)
                   | otherwise =
                     do item <- liftIOUnsafe $ readVector (inputMessages q) i
                        let m' = itemMessage item
@@ -136,10 +141,12 @@ findAntiMessage q m =
                        if t' > t
                          then error "Incorrect index: findAntiMessage"
                          else if t' < t
-                              then return (right, False)
+                              then return (right, Just False)
                               else if antiMessages m m'
-                                   then return (i, True)
-                                   else loop (i - 1)
+                                   then return (i, Just True)
+                                   else if m == m'
+                                        then return (i, Nothing)
+                                        else loop (i - 1)
             in loop right       
 
 -- | Annihilate a message at the specified index.
