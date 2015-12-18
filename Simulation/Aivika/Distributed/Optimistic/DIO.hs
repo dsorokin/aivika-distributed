@@ -11,7 +11,10 @@
 --
 -- This module defines 'DIO' as an instance of the 'MonadDES' type class.
 --
-module Simulation.Aivika.Distributed.Optimistic.DIO where
+module Simulation.Aivika.Distributed.Optimistic.DIO
+       (DIO,
+        DIOParams(..),
+        defaultDIOParams) where
 
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.DES

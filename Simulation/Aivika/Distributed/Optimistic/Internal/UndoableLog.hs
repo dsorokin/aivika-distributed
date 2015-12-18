@@ -41,11 +41,11 @@ data UndoableItem =
 
 -- | Lift the 'IO' computation in an unsafe manner.
 liftIOUnsafe0 :: IO a -> Simulation DIO a
-liftIOUnsafe0 = liftComp . DIO . liftIO
+liftIOUnsafe0 = liftComp . DIO . const . liftIO
 
 -- | Lift the 'IO' computation in an unsafe manner.
 liftIOUnsafe :: IO a -> Event DIO a
-liftIOUnsafe = liftComp . DIO . liftIO
+liftIOUnsafe = liftComp . DIO . const . liftIO
 
 -- | Create an undoable log.
 createUndoableLog :: Simulation DIO UndoableLog
