@@ -13,7 +13,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
         createOutputMessageQueue,
         sendMessage,
-        rollbackMessages) where
+        rollbackMessages,
+        generateMessageSequenceNo) where
 
 import Data.IORef
 
@@ -31,8 +32,10 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the output message queue.
 data OutputMessageQueue =
-  OutputMessageQueue { outputMessages :: Vector Message
+  OutputMessageQueue { outputMessages :: Vector Message,
                        -- ^ The output messages.
+                       outputMessageSequenceNo :: IORef Int
+                       -- ^ The next sequence number.
                      }
 
 -- | Lift the 'IO' computation in an unsafe manner.
@@ -47,7 +50,9 @@ liftIOUnsafe = liftComp . DIO . const . liftIO
 createOutputMessageQueue :: Simulation DIO OutputMessageQueue
 createOutputMessageQueue =
   do ms <- liftIOUnsafe0 newVector
-     return OutputMessageQueue { outputMessages = ms }
+     rn <- liftIOUnsafe0 $ newIORef 0
+     return OutputMessageQueue { outputMessages = ms,
+                                 outputMessageSequenceNo = rn }
 
 -- | Send the message.
 sendMessage :: OutputMessageQueue -> Message -> Event DIO ()
@@ -83,3 +88,11 @@ extractMessagesToRollback q t =
                        loop (i - 1) (m : acc)
   in do n <- liftIOUnsafe $ vectorCount (outputMessages q)
         loop (n - 1) []
+
+-- | Generate a next message sequence number.
+generateMessageSequenceNo :: OutputMessageQueue -> Event DIO Int
+generateMessageSequenceNo q =
+  do n <- liftIOUnsafe $ readIORef (outputMessageSequenceNo q)
+     let n' = n + 1
+     n' `seq` liftIOUnsafe $ writeIORef (outputMessageSequenceNo q) n'
+     return n
