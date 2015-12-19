@@ -11,7 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
        (UndoableLog,
-        createUndoableLog,
+        newUndoableLog,
         writeLog,
         rollbackLog) where
 
@@ -48,8 +48,8 @@ liftIOUnsafe :: IO a -> Event DIO a
 liftIOUnsafe = liftComp . DIO . const . liftIO
 
 -- | Create an undoable log.
-createUndoableLog :: Simulation DIO UndoableLog
-createUndoableLog =
+newUndoableLog :: Simulation DIO UndoableLog
+newUndoableLog =
   do xs <- liftIOUnsafe0 newVector
      return UndoableLog { logItems = xs }
 

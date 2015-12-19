@@ -11,7 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
-        createOutputMessageQueue,
+        newOutputMessageQueue,
         sendMessage,
         rollbackMessages,
         generateMessageSequenceNo) where
@@ -47,8 +47,8 @@ liftIOUnsafe :: IO a -> Event DIO a
 liftIOUnsafe = liftComp . DIO . const . liftIO
 
 -- | Create a new output message queue.
-createOutputMessageQueue :: Simulation DIO OutputMessageQueue
-createOutputMessageQueue =
+newOutputMessageQueue :: Simulation DIO OutputMessageQueue
+newOutputMessageQueue =
   do ms <- liftIOUnsafe0 newVector
      rn <- liftIOUnsafe0 $ newIORef 0
      return OutputMessageQueue { outputMessages = ms,

@@ -11,7 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
-        createInputMessageQueue,
+        newInputMessageQueue,
         enqueueMessage) where
 
 import Simulation.Aivika.Trans.Simulation
@@ -23,9 +23,9 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 data InputMessageQueue
 
-createInputMessageQueue :: (Double -> Event DIO ())
-                           -> (Double -> Event DIO ())
-                           -> SignalSource DIO Message
-                           -> Simulation DIO InputMessageQueue
+newInputMessageQueue :: (Double -> Event DIO ())
+                        -> (Double -> Event DIO ())
+                        -> SignalSource DIO Message
+                        -> Simulation DIO InputMessageQueue
 
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()

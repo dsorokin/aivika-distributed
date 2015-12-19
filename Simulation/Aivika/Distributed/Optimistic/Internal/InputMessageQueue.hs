@@ -11,7 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
-        createInputMessageQueue,
+        newInputMessageQueue,
         enqueueMessage) where
 
 import Data.Maybe
@@ -62,14 +62,14 @@ liftIOUnsafe :: IO a -> Event DIO a
 liftIOUnsafe = liftComp . DIO . const . liftIO
 
 -- | Create a new input message queue.
-createInputMessageQueue :: (Double -> Event DIO ())
-                           -- ^ rollback operations till the specified time before actual changes
-                           -> (Double -> Event DIO ())
-                           -- ^ rollback operations till the specified time after actual changes
-                           -> SignalSource DIO Message
-                           -- ^ the message source
-                           -> Simulation DIO InputMessageQueue
-createInputMessageQueue rollbackPre rollbackPost source =
+newInputMessageQueue :: (Double -> Event DIO ())
+                        -- ^ rollback operations till the specified time before actual changes
+                        -> (Double -> Event DIO ())
+                        -- ^ rollback operations till the specified time after actual changes
+                        -> SignalSource DIO Message
+                        -- ^ the message source
+                        -> Simulation DIO InputMessageQueue
+newInputMessageQueue rollbackPre rollbackPost source =
   do ms <- liftIOUnsafe0 newVector
      r  <- liftIOUnsafe0 $ newIORef 0
      return InputMessageQueue { inputMessageRollbackPre = rollbackPre,
