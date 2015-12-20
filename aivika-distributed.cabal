@@ -20,6 +20,7 @@ library
     exposed-modules: Simulation.Aivika.Distributed
                      Simulation.Aivika.Distributed.Optimistic
                      Simulation.Aivika.Distributed.Optimistic.DIO
+                     Simulation.Aivika.Distributed.Optimistic.Generator
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 

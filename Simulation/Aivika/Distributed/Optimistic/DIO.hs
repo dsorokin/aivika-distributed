@@ -28,6 +28,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Event
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
+import Simulation.Aivika.Distributed.Optimistic.Generator
 import Simulation.Aivika.Distributed.Optimistic.Ref.Base
 
 instance MonadDES DIO
@@ -42,5 +43,3 @@ instance QueueStrategy DIO LCFS
 instance QueueStrategy DIO FCFS
 
 instance MonadComp DIO
-
-instance MonadGenerator DIO
