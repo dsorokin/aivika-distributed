@@ -16,7 +16,10 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 import Control.Applicative
 import Control.Monad
-import Control.Distributed.Process (Process)
+import Control.Exception (throw)
+import Control.Distributed.Process (Process, catch, finally)
+
+import Simulation.Aivika.Trans.Exception
 
 -- | The distributed computation based on 'IO'.
 newtype DIO a = DIO { runDIO :: DIOParams -> Process a
@@ -51,6 +54,17 @@ instance Functor DIO where
 
   {-# INLINE fmap #-}
   fmap f (DIO m) = DIO $ fmap f . m 
+
+instance MonadException DIO where
+
+  catchComp (DIO m) h = DIO $ \ps ->
+    catch (m ps) (\e -> runDIO (h e) ps)
+
+  finallyComp (DIO m1) (DIO m2) = DIO $ \ps ->
+    finally (m1 ps) (m2 ps)
+  
+  throwComp e = DIO $ \ps ->
+    throw e
 
 -- | The default 'DIO' parameters.
 defaultDIOParams :: DIOParams

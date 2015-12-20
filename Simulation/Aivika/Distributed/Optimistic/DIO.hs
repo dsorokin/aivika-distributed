@@ -43,6 +43,4 @@ instance QueueStrategy DIO FCFS
 
 instance MonadComp DIO
 
-instance MonadException DIO
-
 instance MonadGenerator DIO
