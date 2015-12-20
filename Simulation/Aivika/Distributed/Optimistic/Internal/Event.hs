@@ -31,6 +31,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 -- | An implementation of the 'EventQueueing' type class.
 instance EventQueueing DIO where
 
+  -- | The event queue type.
   data EventQueue DIO =
     EventQueue { queueInputMessages :: InputMessageQueue,
                  -- ^ the input message queue

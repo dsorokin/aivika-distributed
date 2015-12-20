@@ -26,6 +26,9 @@ class MonadIOUnsafe m where
   -- | Lift the computation.
   liftIOUnsafe :: IO a -> m a
 
+instance MonadIOUnsafe DIO where
+  liftIOUnsafe = DIO . const . liftIO
+
 instance MonadIOUnsafe (Parameter DIO) where
   liftIOUnsafe = liftComp . DIO . const . liftIO 
 

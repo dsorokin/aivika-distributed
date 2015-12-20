@@ -13,7 +13,9 @@
 module Simulation.Aivika.Distributed.Optimistic
        (-- * Modules
         module Simulation.Aivika.Distributed.Optimistic.DIO,
+        module Simulation.Aivika.Distributed.Optimistic.Ref.Base,
         module Simulation.Aivika.Distributed.Optimistic.TimeServer) where
 
 import Simulation.Aivika.Distributed.Optimistic.DIO
+import Simulation.Aivika.Distributed.Optimistic.Ref.Base
 import Simulation.Aivika.Distributed.Optimistic.TimeServer
