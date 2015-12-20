@@ -12,8 +12,7 @@
 -- The module defines an event queue.
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.Event
-       (EventQueue,
-        queueLog) where
+       (queueLog) where
 
 import Data.IORef
 
@@ -21,12 +20,15 @@ import Control.Monad
 import Control.Monad.Trans
 
 import Simulation.Aivika.Trans
+import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
+import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Ref.Base
+import qualified Simulation.Aivika.Distributed.Optimistic.PriorityQueue as PQ
 
 -- | An implementation of the 'EventQueueing' type class.
 instance EventQueueing DIO where
@@ -39,9 +41,11 @@ instance EventQueueing DIO where
                  -- ^ the output message queue
                  queueLog :: UndoableLog,
                  -- ^ the undoable log of operations
-                 queueBusy :: IORef Bool,
+                 queuePQ :: Ref DIO (PQ.PriorityQueue (Point DIO -> DIO ())),
+                 -- ^ the underlying priority queue
+                 queueBusy :: Ref DIO Bool,
                  -- ^ whether the queue is currently processing events
-                 queueTime :: IORef Double
+                 queueTime :: Ref DIO Double
                  -- ^ the actual time of the event queue
                }
 
