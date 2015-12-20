@@ -28,6 +28,7 @@ import Simulation.Aivika.Trans.Event
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the output message queue.
@@ -38,19 +39,11 @@ data OutputMessageQueue =
                        -- ^ The next sequence number.
                      }
 
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe0 :: IO a -> Simulation DIO a
-liftIOUnsafe0 = liftComp . DIO . const . liftIO
-
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe :: IO a -> Event DIO a
-liftIOUnsafe = liftComp . DIO . const . liftIO
-
 -- | Create a new output message queue.
 newOutputMessageQueue :: Simulation DIO OutputMessageQueue
 newOutputMessageQueue =
-  do ms <- liftIOUnsafe0 newVector
-     rn <- liftIOUnsafe0 $ newIORef 0
+  do ms <- liftIOUnsafe newVector
+     rn <- liftIOUnsafe $ newIORef 0
      return OutputMessageQueue { outputMessages = ms,
                                  outputMessageSequenceNo = rn }
 

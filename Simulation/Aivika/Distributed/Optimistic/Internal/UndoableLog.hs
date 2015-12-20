@@ -25,6 +25,7 @@ import Simulation.Aivika.Trans.Dynamics
 import Simulation.Aivika.Trans.Event
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 
 -- | Specified an undoable log with ability to rollback the operations.
 data UndoableLog =
@@ -39,18 +40,10 @@ data UndoableItem =
                  -- ^ Undo the operation
                }
 
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe0 :: IO a -> Simulation DIO a
-liftIOUnsafe0 = liftComp . DIO . const . liftIO
-
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe :: IO a -> Event DIO a
-liftIOUnsafe = liftComp . DIO . const . liftIO
-
 -- | Create an undoable log.
 newUndoableLog :: Simulation DIO UndoableLog
 newUndoableLog =
-  do xs <- liftIOUnsafe0 newVector
+  do xs <- liftIOUnsafe newVector
      return UndoableLog { logItems = xs }
 
 -- | Write a new undoable operation.

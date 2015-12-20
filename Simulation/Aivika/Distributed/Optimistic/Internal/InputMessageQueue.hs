@@ -29,6 +29,7 @@ import Simulation.Aivika.Trans.Signal
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
@@ -53,14 +54,6 @@ data InputMessageQueueItem =
                           -- ^ A cancellable event for the item.
                         }
 
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe0 :: IO a -> Simulation DIO a
-liftIOUnsafe0 = liftComp . DIO . const . liftIO
-
--- | Lift the 'IO' computation in an unsafe manner.
-liftIOUnsafe :: IO a -> Event DIO a
-liftIOUnsafe = liftComp . DIO . const . liftIO
-
 -- | Create a new input message queue.
 newInputMessageQueue :: (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time before actual changes
@@ -70,8 +63,8 @@ newInputMessageQueue :: (Double -> Event DIO ())
                         -- ^ the message source
                         -> Simulation DIO InputMessageQueue
 newInputMessageQueue rollbackPre rollbackPost source =
-  do ms <- liftIOUnsafe0 newVector
-     r  <- liftIOUnsafe0 $ newIORef 0
+  do ms <- liftIOUnsafe newVector
+     r  <- liftIOUnsafe $ newIORef 0
      return InputMessageQueue { inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
                                 inputMessageSource = source,

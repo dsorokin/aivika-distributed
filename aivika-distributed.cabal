@@ -24,6 +24,7 @@ library
 
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.DIO
                      Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
+                     Simulation.Aivika.Distributed.Optimistic.Internal.IO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Message
                      Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
@@ -36,7 +37,8 @@ library
                      aivika >= 4.3.1,
                      aivika-transformers >= 4.3.1
 
-    extensions:      MultiParamTypeClasses
+    extensions:      MultiParamTypeClasses,
+                     FlexibleInstances
 
     ghc-options:     -O2
 
