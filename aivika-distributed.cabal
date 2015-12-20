@@ -36,6 +36,7 @@ library
 
     build-depends:   base >= 3 && < 6,
                      mtl >= 2.1.1,
+                     random >= 1.0.0.3,
                      bytestring >= 0.10.4.0,
                      distributed-process >= 0.5.5.1,
                      aivika >= 4.3.1,
