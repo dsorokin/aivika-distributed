@@ -21,6 +21,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic
                      Simulation.Aivika.Distributed.Optimistic.DIO
                      Simulation.Aivika.Distributed.Optimistic.Generator
+                     Simulation.Aivika.Distributed.Optimistic.QueueStrategy
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 
