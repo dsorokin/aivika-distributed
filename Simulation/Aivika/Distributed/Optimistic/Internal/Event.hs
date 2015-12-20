@@ -11,7 +11,9 @@
 --
 -- The module defines an event queue.
 --
-module Simulation.Aivika.Distributed.Optimistic.Internal.Event (EventQueue(..)) where
+module Simulation.Aivika.Distributed.Optimistic.Internal.Event
+       (EventQueue,
+        queueLog) where
 
 import Data.IORef
 
