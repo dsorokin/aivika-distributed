@@ -27,7 +27,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
-import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Ref.Base
+import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref as R
 import qualified Simulation.Aivika.Distributed.Optimistic.PriorityQueue as PQ
 
 -- | An implementation of the 'EventQueueing' type class.
@@ -41,11 +41,11 @@ instance EventQueueing DIO where
                  -- ^ the output message queue
                  queueLog :: UndoableLog,
                  -- ^ the undoable log of operations
-                 queuePQ :: Ref DIO (PQ.PriorityQueue (Point DIO -> DIO ())),
+                 queuePQ :: R.Ref (PQ.PriorityQueue (Point DIO -> DIO ())),
                  -- ^ the underlying priority queue
-                 queueBusy :: Ref DIO Bool,
+                 queueBusy :: R.Ref Bool,
                  -- ^ whether the queue is currently processing events
-                 queueTime :: Ref DIO Double
+                 queueTime :: R.Ref Double
                  -- ^ the actual time of the event queue
                }
 

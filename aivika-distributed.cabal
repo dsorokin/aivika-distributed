@@ -32,6 +32,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Internal.IO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Message
                      Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Ref
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
                      Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 
