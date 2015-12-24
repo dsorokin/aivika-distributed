@@ -64,8 +64,16 @@ instance EventQueueing DIO where
                            queueBusy = f,
                            queueTime = t }
 
-  enqueueEvent t m = undefined
+  enqueueEvent t (Event m) =
+    Event $ \p ->
+    let r = queuePQ $ runEventQueue $ pointRun p
+    in invokeEvent p $
+       R.modifyRef r $ \pq -> PQ.enqueue pq t m
 
   runEventWith processing m = undefined
 
-  eventQueueCount = undefined
+  eventQueueCount =
+    Event $ \p ->
+    let r = queuePQ $ runEventQueue $ pointRun p
+    in invokeEvent p $
+       fmap PQ.queueCount $ R.readRef r
