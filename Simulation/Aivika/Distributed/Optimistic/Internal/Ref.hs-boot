@@ -9,12 +9,7 @@
 --
 -- This is an hs-boot file.
 --
-module Simulation.Aivika.Distributed.Optimistic.Internal.Ref
-       (Ref,
-        newRef,
-        readRef,
-        writeRef,
-        modifyRef) where
+module Simulation.Aivika.Distributed.Optimistic.Internal.Ref where
 
 import Simulation.Aivika.Trans.Internal.Types
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -24,6 +19,8 @@ data Ref a
 instance Eq (Ref a)
 
 newRef :: a -> Simulation DIO (Ref a)
+
+newRef0 :: a -> DIO (Ref a)
      
 readRef :: Ref a -> Event DIO a
 

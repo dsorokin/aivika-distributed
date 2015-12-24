@@ -41,7 +41,7 @@ data UndoableItem =
                }
 
 -- | Create an undoable log.
-newUndoableLog :: Simulation DIO UndoableLog
+newUndoableLog :: DIO UndoableLog
 newUndoableLog =
   do xs <- liftIOUnsafe newVector
      return UndoableLog { logItems = xs }

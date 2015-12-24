@@ -25,7 +25,8 @@ data InputMessageQueue
 
 newInputMessageQueue :: (Double -> Event DIO ())
                         -> (Double -> Event DIO ())
-                        -> SignalSource DIO Message
-                        -> Simulation DIO InputMessageQueue
+                        -> DIO InputMessageQueue
 
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
+
+messageEnqueued :: InputMessageQueue -> Signal DIO Message

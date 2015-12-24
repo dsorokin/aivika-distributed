@@ -40,7 +40,7 @@ data OutputMessageQueue =
                      }
 
 -- | Create a new output message queue.
-newOutputMessageQueue :: Simulation DIO OutputMessageQueue
+newOutputMessageQueue :: DIO OutputMessageQueue
 newOutputMessageQueue =
   do ms <- liftIOUnsafe newVector
      rn <- liftIOUnsafe $ newIORef 0

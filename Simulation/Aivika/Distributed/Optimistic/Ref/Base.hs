@@ -14,6 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Ref.Base () where
 
 import Simulation.Aivika.Trans.Internal.Types
+import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Ref.Base
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -39,3 +40,8 @@ instance MonadRef DIO where
 
   {-# INLINE equalRef #-}
   equalRef (Ref r1) (Ref r2) = (r1 == r2)
+
+instance MonadRef0 DIO where
+
+  {-# INLINE newRef0 #-}
+  newRef0 = fmap Ref . R.newRef0

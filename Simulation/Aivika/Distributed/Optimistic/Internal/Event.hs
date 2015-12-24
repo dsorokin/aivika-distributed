@@ -24,6 +24,7 @@ import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
+import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
@@ -49,7 +50,19 @@ instance EventQueueing DIO where
                  -- ^ the actual time of the event queue
                }
 
-  newEventQueue specs = undefined
+  newEventQueue specs =
+    do f <- R.newRef0 False
+       t <- R.newRef0 $ spcStartTime specs
+       pq <- R.newRef0 PQ.emptyQueue
+       log <- newUndoableLog
+       output <- newOutputMessageQueue
+       input <- newInputMessageQueue (rollbackLog log) (rollbackMessages output)
+       return EventQueue { queueInputMessages = input,
+                           queueOutputMessages = output,
+                           queueLog  = log,
+                           queuePQ   = pq,
+                           queueBusy = f,
+                           queueTime = t }
 
   enqueueEvent t m = undefined
 

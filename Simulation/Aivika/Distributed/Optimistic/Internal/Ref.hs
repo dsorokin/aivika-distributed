@@ -12,6 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Ref
        (Ref,
         newRef,
+        newRef0,
         readRef,
         writeRef,
         modifyRef) where
@@ -37,7 +38,12 @@ instance Eq (Ref a) where
 -- | Create a new reference.
 newRef :: a -> Simulation DIO (Ref a)
 newRef a =
-  Simulation $ \r ->
+  do x <- liftIOUnsafe $ newIORef a
+     return Ref { refValue = x }
+
+-- | Create a new reference.
+newRef0 :: a -> DIO (Ref a)
+newRef0 a =
   do x <- liftIOUnsafe $ newIORef a
      return Ref { refValue = x }
      

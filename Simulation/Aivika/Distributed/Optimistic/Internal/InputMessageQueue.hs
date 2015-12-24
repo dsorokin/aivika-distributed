@@ -12,7 +12,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
-        enqueueMessage) where
+        enqueueMessage,
+        messageEnqueued) where
 
 import Data.Maybe
 import Data.IORef
@@ -59,17 +60,20 @@ newInputMessageQueue :: (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time before actual changes
                         -> (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time after actual changes
-                        -> SignalSource DIO Message
-                        -- ^ the message source
-                        -> Simulation DIO InputMessageQueue
-newInputMessageQueue rollbackPre rollbackPost source =
+                        -> DIO InputMessageQueue
+newInputMessageQueue rollbackPre rollbackPost =
   do ms <- liftIOUnsafe newVector
      r  <- liftIOUnsafe $ newIORef 0
+     s  <- newSignalSource0
      return InputMessageQueue { inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
-                                inputMessageSource = source,
+                                inputMessageSource = s,
                                 inputMessages = ms,
                                 inputMessageIndex = r }
+
+-- | Raised when the message is enqueued.
+messageEnqueued :: InputMessageQueue -> Signal DIO Message
+messageEnqueued q = publishSignal (inputMessageSource q)
 
 -- | Enqueue a new message ignoring the duplicated messages.
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
