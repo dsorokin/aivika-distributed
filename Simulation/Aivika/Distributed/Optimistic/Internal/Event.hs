@@ -66,14 +66,88 @@ instance EventQueueing DIO where
 
   enqueueEvent t (Event m) =
     Event $ \p ->
-    let r = queuePQ $ runEventQueue $ pointRun p
+    let pq = queuePQ $ runEventQueue $ pointRun p
     in invokeEvent p $
-       R.modifyRef r $ \pq -> PQ.enqueue pq t m
+       R.modifyRef pq $ \x -> PQ.enqueue x t m
 
-  runEventWith processing m = undefined
+  runEventWith processing (Event e) =
+    Dynamics $ \p ->
+    do invokeDynamics p $ processEvents processing
+       e p
 
   eventQueueCount =
     Event $ \p ->
-    let r = queuePQ $ runEventQueue $ pointRun p
+    let pq = queuePQ $ runEventQueue $ pointRun p
     in invokeEvent p $
-       fmap PQ.queueCount $ R.readRef r
+       fmap PQ.queueCount $ R.readRef pq
+
+-- | Process the pending events.
+processPendingEventsCore :: Bool -> Dynamics DIO ()
+processPendingEventsCore includingCurrentEvents = Dynamics r where
+  r p =
+    do let q = runEventQueue $ pointRun p
+           f = queueBusy q
+       f' <- invokeEvent p $ R.readRef f
+       unless f' $
+         do invokeEvent p $ R.writeRef f True
+            call q p
+            invokeEvent p $ R.writeRef f False
+  call q p =
+    do let pq = queuePQ q
+           r  = pointRun p
+       f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
+       unless f $
+         do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
+            let t = queueTime q
+            t' <- invokeEvent p $ R.readRef t
+            when (t2 < t') $ 
+              error "The time value is too small: processPendingEventsCore"
+            when ((t2 < pointTime p) ||
+                  (includingCurrentEvents && (t2 == pointTime p))) $
+              do invokeEvent p $ R.writeRef t t2
+                 invokeEvent p $ R.modifyRef pq PQ.dequeue
+                 let sc = pointSpecs p
+                     t0 = spcStartTime sc
+                     dt = spcDT sc
+                     n2 = fromIntegral $ floor ((t2 - t0) / dt)
+                 c2 $ p { pointTime = t2,
+                          pointIteration = n2,
+                          pointPhase = -1 }
+                 call q p
+
+-- | Process the pending events synchronously, i.e. without past.
+processPendingEvents :: Bool -> Dynamics DIO ()
+processPendingEvents includingCurrentEvents = Dynamics r where
+  r p =
+    do let q = runEventQueue $ pointRun p
+           t = queueTime q
+       t' <- invokeEvent p $ R.readRef t
+       if pointTime p < t'
+         then error $
+              "The current time is less than " ++
+              "the time in the queue: processPendingEvents"
+         else invokeDynamics p m
+  m = processPendingEventsCore includingCurrentEvents
+
+-- | A memoized value.
+processEventsIncludingCurrent :: Dynamics DIO ()
+processEventsIncludingCurrent = processPendingEvents True
+
+-- | A memoized value.
+processEventsIncludingEarlier :: Dynamics DIO ()
+processEventsIncludingEarlier = processPendingEvents False
+
+-- | A memoized value.
+processEventsIncludingCurrentCore :: Dynamics DIO ()
+processEventsIncludingCurrentCore = processPendingEventsCore True
+
+-- | A memoized value.
+processEventsIncludingEarlierCore :: Dynamics DIO ()
+processEventsIncludingEarlierCore = processPendingEventsCore True
+
+-- | Process the events.
+processEvents :: EventProcessing -> Dynamics DIO ()
+processEvents CurrentEvents = processEventsIncludingCurrent
+processEvents EarlierEvents = processEventsIncludingEarlier
+processEvents CurrentEventsOrFromPast = processEventsIncludingCurrentCore
+processEvents EarlierEventsOrFromPast = processEventsIncludingEarlierCore
