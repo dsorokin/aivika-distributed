@@ -42,13 +42,16 @@ library
                      mtl >= 2.1.1,
                      random >= 1.0.0.3,
                      bytestring >= 0.10.4.0,
+                     binary >= 0.6.4.0,
                      distributed-process >= 0.5.5.1,
                      aivika >= 4.3.1,
                      aivika-transformers >= 4.3.1
 
     extensions:      MultiParamTypeClasses,
                      FlexibleInstances,
-                     TypeFamilies
+                     TypeFamilies,
+                     RankNTypes,
+                     ScopedTypeVariables
 
     ghc-options:     -O2
 

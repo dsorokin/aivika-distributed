@@ -1,4 +1,6 @@
 
+{-# LANGUAGE RankNTypes #-}
+
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Message
 -- Copyright  : Copyright (c) 2015, David Sorokin <david.sorokin@gmail.com>
@@ -16,7 +18,10 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
         deliverMessage,
         deliverAntiMessage) where
 
-import Data.ByteString
+import qualified Data.ByteString as BBS
+import qualified Data.ByteString.Lazy as LBS
+import Data.Typeable
+import Data.Binary
 
 import Control.Distributed.Process (ProcessId)
 import Control.Distributed.Process.Serializable
@@ -37,9 +42,51 @@ data Message =
             -- ^ The receiver of the message.
             messageAntiToggle :: Bool,
             -- ^ Whether this is an anti-message.
-            messageData :: ByteString
-            -- ^ The message data.
-          } deriving (Eq, Ord, Show)
+            messageBinaryData :: BBS.ByteString,
+            -- ^ The message binary data.
+            messageDecodedData :: forall a. Serializable a => a,
+            -- ^ The decoded message data.
+            messageBinaryFingerprint :: BBS.ByteString,
+            -- ^ The message binary fingerprint of the data type.
+            messageDecodedFingerprint :: Fingerprint
+            -- ^ The decoded message fingerprint of the data type.
+          } deriving (Typeable)
+
+instance Binary Message where
+
+  put x =
+    do put (messageSequenceNo x)
+       put (messageSendTime x)
+       put (messageReceiveTime x)
+       put (messageSender x)
+       put (messageReceiver x)
+       put (messageAntiToggle x)
+       put (messageBinaryData x)
+       put (messageBinaryFingerprint x)
+  
+  get =
+    do sequenceNo <- get
+       sendTime <- get
+       receiveTime <- get
+       sender <- get
+       receiver <- get
+       antiToggle <- get
+       binaryData <- get
+       binaryFingerprint <- get
+       let decodedData :: forall a. Serializable a => a
+           decodedData = decode $ LBS.fromStrict binaryData
+           decodedFingerprint = decodeFingerprint binaryFingerprint
+       return Message { messageSequenceNo = sequenceNo,
+                        messageSendTime = sendTime,
+                        messageReceiveTime = receiveTime,
+                        messageSender = sender,
+                        messageReceiver = receiver,
+                        messageAntiToggle = antiToggle,
+                        messageBinaryData = binaryData,
+                        messageDecodedData = decodedData,
+                        messageBinaryFingerprint = binaryFingerprint,
+                        messageDecodedFingerprint = decodedFingerprint
+                      }
 
 -- | Return an anti-message.
 antiMessage :: Message -> Message
@@ -54,7 +101,20 @@ antiMessages x y =
   (messageSender x == messageSender y) &&
   (messageReceiver x == messageReceiver y) &&
   (messageAntiToggle x /= messageAntiToggle y) &&
-  (messageData x == messageData y)
+  (messageBinaryFingerprint x == messageBinaryFingerprint y) &&
+  (messageBinaryData x == messageBinaryData y)
+
+instance Eq Message where
+
+  x == y =
+    (messageSequenceNo x == messageSequenceNo y) &&
+    (messageSendTime x == messageSendTime y) &&
+    (messageReceiveTime x == messageReceiveTime y) &&
+    (messageSender x == messageSender y) &&
+    (messageReceiver x == messageReceiver y) &&
+    (messageAntiToggle x == messageAntiToggle y) &&
+    (messageBinaryFingerprint x == messageBinaryFingerprint y) &&
+    (messageBinaryData x == messageBinaryData y)
 
 -- | Deliver the message on low level.
 deliverMessage :: Message -> DIO ()
