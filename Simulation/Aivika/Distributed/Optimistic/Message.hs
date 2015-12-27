@@ -19,8 +19,14 @@ module Simulation.Aivika.Distributed.Optimistic.Message
         expectMessageTimeout,
         messageReceived) where
 
+import Unsafe.Coerce
+
+import Data.Binary
+import qualified Data.ByteString as BBS
+import qualified Data.ByteString.Lazy as LBS
+
 import Control.Monad
-import Control.Distributed.Process (ProcessId)
+import Control.Distributed.Process (ProcessId, getSelfPid)
 import Control.Distributed.Process.Serializable
 
 import Simulation.Aivika.Trans hiding (ProcessId)
@@ -30,6 +36,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Event
 import qualified Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue as IMQ
+import qualified Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue as OMQ
 
 -- | Send a message to the specified remote process with the current receive time.
 sendMessage :: forall a. Serializable a => ProcessId -> a -> Event DIO ()
@@ -39,7 +46,33 @@ sendMessage pid a =
 
 -- | Send a message to the specified remote process with the given receive time.
 enqueueMessage :: forall a. Serializable a => ProcessId -> Double -> a -> Event DIO ()
-enqueueMessage = undefined
+enqueueMessage pid t a =
+  Event $ \p ->
+  let queue = queueOutputMessages $
+              runEventQueue (pointRun p)
+  in invokeEvent p $
+     do sequenceNo <- OMQ.generateMessageSequenceNo queue
+        let sendTime    = pointTime p
+            receiveTime = t
+        sender <- liftComp $ liftDIOUnsafe $ getSelfPid
+        let receiver = pid
+            antiToggle = False
+            binaryData = LBS.toStrict $ encode a
+            decodedData = unsafeCoerce a
+            binaryFingerprint = encodeFingerprint decodedFingerprint
+            decodedFingerprint = fingerprint a
+            message = Message { messageSequenceNo = sequenceNo,
+                                messageSendTime = sendTime,
+                                messageReceiveTime = receiveTime,
+                                messageSender = sender,
+                                messageReceiver = receiver,
+                                messageAntiToggle = antiToggle,
+                                messageBinaryData = binaryData,
+                                messageDecodedData = decodedData,
+                                messageBinaryFingerprint = binaryFingerprint,
+                                messageDecodedFingerprint = decodedFingerprint
+                              }
+        OMQ.sendMessage queue message
 
 -- | Blocks the simulation waiting for a message of the specified type.
 expectMessage :: forall a. Serializable a => Event DIO a
@@ -55,15 +88,15 @@ messageReceived =
   let f = fingerprint (undefined :: a)
   in Signal { handleSignal = \h ->
                Event $ \p ->
-               do let signal = IMQ.messageEnqueued $
-                               queueInputMessages $
-                               runEventQueue (pointRun p)
-                  invokeEvent p $
-                    handleSignal signal $ \x ->
-                    when (f == messageDecodedFingerprint x) $
-                      let decoded :: a
-                          decoded = messageDecodedData x
-                      in decoded `seq` h decoded
+               let queue = queueInputMessages $
+                           runEventQueue (pointRun p)
+                   signal = IMQ.messageEnqueued queue
+               in invokeEvent p $
+                  handleSignal signal $ \x ->
+                  when (f == messageDecodedFingerprint x) $
+                  let decoded :: a
+                      decoded = messageDecodedData x
+                  in decoded `seq` h decoded
             }
                       
                         
