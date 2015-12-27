@@ -42,7 +42,7 @@ data Message =
             -- ^ The receiver of the message.
             messageAntiToggle :: Bool,
             -- ^ Whether this is an anti-message.
-            messageBinaryData :: BBS.ByteString,
+            messageBinaryData :: LBS.ByteString,
             -- ^ The message binary data.
             messageDecodedData :: forall a. Serializable a => a,
             -- ^ The decoded message data.
@@ -74,7 +74,7 @@ instance Binary Message where
        binaryData <- get
        binaryFingerprint <- get
        let decodedData :: forall a. Serializable a => a
-           decodedData = decode $ LBS.fromStrict binaryData
+           decodedData = decode binaryData
            decodedFingerprint = decodeFingerprint binaryFingerprint
        return Message { messageSequenceNo = sequenceNo,
                         messageSendTime = sendTime,

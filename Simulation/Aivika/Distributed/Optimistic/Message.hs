@@ -57,7 +57,7 @@ enqueueMessage pid t a =
         sender <- liftComp $ liftDIOUnsafe $ getSelfPid
         let receiver = pid
             antiToggle = False
-            binaryData = LBS.toStrict $ encode a
+            binaryData = encode a
             decodedData = unsafeCoerce a
             binaryFingerprint = encodeFingerprint decodedFingerprint
             decodedFingerprint = fingerprint a

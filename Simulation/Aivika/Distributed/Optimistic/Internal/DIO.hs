@@ -12,10 +12,12 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
+        liftDIOUnsafe,
         defaultDIOParams) where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.Trans
 import Control.Exception (throw)
 import Control.Distributed.Process (Process, catch, finally)
 
@@ -70,3 +72,7 @@ instance MonadException DIO where
 defaultDIOParams :: DIOParams
 defaultDIOParams =
   DIOParams { dioParamRecallTimeout = 60000 }
+
+-- | Lift the 'DIO' computation.
+liftDIOUnsafe :: Process a -> DIO a
+liftDIOUnsafe = DIO . const
