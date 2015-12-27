@@ -74,12 +74,13 @@ enqueueMessage pid t a =
                               }
         OMQ.sendMessage queue message
 
--- | Blocks the simulation waiting for a message of the specified type.
-expectMessage :: forall a. Serializable a => Event DIO a
+-- | Blocks the simulation until the specified signal is triggered which
+-- must depend directly or undirectly on the 'messageReceived' signal.
+expectMessage :: Signal DIO a -> Event DIO a
 expectMessage = undefined
 
 -- | Like 'expectMessage' but with a timeout.
-expectMessageTimeout :: forall a. Serializable a => Int -> Event DIO (Maybe a)
+expectMessageTimeout :: Int -> Signal DIO a -> Event DIO (Maybe a)
 expectMessageTimeout = undefined
 
 -- | The signal triggered when the remote message of the specified type has come.
