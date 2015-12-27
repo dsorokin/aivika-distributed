@@ -75,7 +75,7 @@ enqueueMessage pid t a =
         OMQ.sendMessage queue message
 
 -- | Blocks the simulation until the specified signal is triggered which
--- must depend directly or undirectly on the 'messageReceived' signal.
+-- must depend directly or indirectly on the 'messageReceived' signal.
 expectMessage :: Signal DIO a -> Event DIO a
 expectMessage = undefined
 
