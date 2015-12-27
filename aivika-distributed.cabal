@@ -1,8 +1,9 @@
 name:            aivika-distributed
 version:         0.1
-synopsis:        Distributed simulation library
+synopsis:        Parallel distributed simulation library
 description:
-    This package extends the Aivika library with facilities for running distributed simulations.
+    This package extends the Aivika library with facilities for running parallel distributed simulations.
+    It uses an optimistic strategy known as the Time Warp method.
     .
 category:        Simulation
 license:         BSD3
