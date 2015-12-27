@@ -23,7 +23,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Typeable
 import Data.Binary
 
-import Control.Distributed.Process (ProcessId)
+import Control.Distributed.Process (ProcessId, send)
 import Control.Distributed.Process.Serializable
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -118,10 +118,14 @@ instance Eq Message where
 
 -- | Deliver the message on low level.
 deliverMessage :: Message -> DIO ()
-deliverMessage = undefined
+deliverMessage x =
+  liftDIOUnsafe $
+  send (messageReceiver x) x
 
 -- | Similar to 'deliverMessage' but has a timeout whithin which
 -- the delivery can be repeated in case of failure as we have
 -- to deliver the anti-message as soon as possible.
 deliverAntiMessage :: Message -> DIO ()
-deliverAntiMessage = undefined
+deliverAntiMessage x =
+  liftDIOUnsafe $
+  send (messageReceiver x) x
