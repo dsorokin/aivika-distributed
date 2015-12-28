@@ -119,7 +119,7 @@ instance Eq Message where
 -- | Deliver the message on low level.
 deliverMessage :: Message -> DIO ()
 deliverMessage x =
-  liftDIOUnsafe $
+  liftDistributedUnsafe $
   send (messageReceiver x) x
 
 -- | Similar to 'deliverMessage' but has a timeout whithin which
@@ -127,5 +127,5 @@ deliverMessage x =
 -- to deliver the anti-message as soon as possible.
 deliverAntiMessage :: Message -> DIO ()
 deliverAntiMessage x =
-  liftDIOUnsafe $
+  liftDistributedUnsafe $
   send (messageReceiver x) x

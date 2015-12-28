@@ -12,7 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
-        liftDIOUnsafe,
+        liftDistributedUnsafe,
         defaultDIOParams) where
 
 import Control.Applicative
@@ -73,6 +73,6 @@ defaultDIOParams :: DIOParams
 defaultDIOParams =
   DIOParams { dioParamRecallTimeout = 60000 }
 
--- | Lift the 'DIO' computation.
-liftDIOUnsafe :: Process a -> DIO a
-liftDIOUnsafe = DIO . const
+-- | Lift the distributed 'Process' computation.
+liftDistributedUnsafe :: Process a -> DIO a
+liftDistributedUnsafe = DIO . const
