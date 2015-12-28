@@ -1,6 +1,7 @@
 
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Message
@@ -21,6 +22,7 @@ module Simulation.Aivika.Distributed.Optimistic.Message
 
 import Unsafe.Coerce
 
+import Data.Time
 import Data.Binary
 import qualified Data.ByteString as BBS
 import qualified Data.ByteString.Lazy as LBS
@@ -33,10 +35,13 @@ import Simulation.Aivika.Trans hiding (ProcessId)
 import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Event
 import qualified Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue as IMQ
 import qualified Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue as OMQ
+import Simulation.Aivika.Distributed.Optimistic.DIO
+import Simulation.Aivika.Distributed.Optimistic.Ref.Base
 
 -- | Send a message to the specified remote process with the current receive time.
 sendMessage :: forall a. Serializable a => ProcessId -> a -> Event DIO ()
@@ -76,13 +81,46 @@ enqueueMessage pid t a =
 
 -- | Blocks the simulation until the specified signal is triggered which
 -- must depend directly or indirectly on the 'messageReceived' signal.
-expectMessage :: Signal DIO a -> Event DIO a
-expectMessage = undefined
+expectMessage :: Signal DIO a -> Process DIO a
+expectMessage signal =
+  do pid <- liftSimulation newProcessId
+     spawnProcessUsingIdWith CancelChildAfterParent pid $
+       let loop =
+             do liftEvent expectInputMessage
+                loop
+       in loop
+     processAwait $
+       flip mapSignalM signal $ \a ->
+       do cancelProcessWithId pid
+          return a
 
--- | Like 'expectMessage' but with a timeout.
-expectMessageTimeout :: Int -> Signal DIO a -> Event DIO (Maybe a)
-expectMessageTimeout = undefined
-
+-- | Like 'expectMessage' but with a timeout in milliseconds.
+expectMessageTimeout :: Int -> Signal DIO a -> Process DIO (Maybe a)
+expectMessageTimeout timeout signal =
+  do t0   <- liftComp $ liftIOUnsafe getCurrentTime
+     src  <- liftSimulation newSignalSource
+     pid1 <- liftSimulation newProcessId
+     pid2 <- liftSimulation newProcessId
+     spawnProcessUsingIdWith CancelChildAfterParent pid1 $
+       let loop dt =
+             do liftEvent $ expectInputMessageTimeout dt
+                when (dt > 0) $
+                  do t1 <- liftComp $ liftIOUnsafe getCurrentTime
+                     let dt' = timeout - truncate (1000 * diffUTCTime t1 t0)
+                     if dt' > 0
+                       then loop dt'
+                       else return ()
+       in do loop timeout
+             liftEvent $
+               do cancelProcessWithId pid2
+                  triggerSignal src Nothing
+     spawnProcessUsingIdWith CancelChildAfterParent pid2 $
+       do a <- processAwait signal
+          liftEvent $
+            do cancelProcessWithId pid1
+               triggerSignal src (Just a)
+     processAwait (publishSignal src)
+          
 -- | The signal triggered when the remote message of the specified type has come.
 messageReceived :: forall a. Serializable a => Signal DIO a
 messageReceived =

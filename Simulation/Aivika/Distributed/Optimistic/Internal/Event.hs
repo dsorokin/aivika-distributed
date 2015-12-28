@@ -14,7 +14,9 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
-        queueLog) where
+        queueLog,
+        expectInputMessage,
+        expectInputMessageTimeout) where
 
 import Data.IORef
 
@@ -153,3 +155,40 @@ processEvents CurrentEvents = processEventsIncludingCurrent
 processEvents EarlierEvents = processEventsIncludingEarlier
 processEvents CurrentEventsOrFromPast = processEventsIncludingCurrentCore
 processEvents EarlierEventsOrFromPast = processEventsIncludingEarlierCore
+
+-- | Process the current events only.
+processCurrentEvents :: Dynamics DIO ()
+processCurrentEvents = Dynamics r where
+  r p =
+    let q = runEventQueue $ pointRun p
+    in call q p
+  call q p =
+    do let pq = queuePQ q
+           r  = pointRun p
+       f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
+       unless f $
+         do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
+            let t = queueTime q
+            t' <- invokeEvent p $ R.readRef t
+            when (t2 < t') $ 
+              error "The time value is too small: processCurrentEvents"
+            when (t2 == pointTime p) $
+              do invokeEvent p $ R.writeRef t t2
+                 invokeEvent p $ R.modifyRef pq PQ.dequeue
+                 c2 p
+                 call q p
+
+-- | Expect the input message.
+expectInputMessage :: Event DIO ()
+expectInputMessage =
+  Event $ \p ->
+  do invokeEvent p processInputMessage
+     invokeDynamics p processCurrentEvents
+
+-- | Like 'expectInputMessage' but with a timeout in milliseconds.
+expectInputMessageTimeout :: Int -> Event DIO ()
+expectInputMessageTimeout = undefined
+
+-- | Process an input message.
+processInputMessage :: Event DIO ()
+processInputMessage = undefined

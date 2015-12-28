@@ -49,6 +49,7 @@ library
 
     extensions:      MultiParamTypeClasses,
                      FlexibleInstances,
+                     FlexibleContexts,
                      TypeFamilies,
                      RankNTypes,
                      ScopedTypeVariables
