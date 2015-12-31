@@ -1,6 +1,5 @@
 
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 -- |
@@ -20,15 +19,10 @@ module Simulation.Aivika.Distributed.Optimistic.Message
         expectMessageTimeout,
         messageReceived) where
 
-import Unsafe.Coerce
-
 import Data.Time
-import Data.Binary
-import qualified Data.ByteString as BBS
-import qualified Data.ByteString.Lazy as LBS
 
 import Control.Monad
-import Control.Distributed.Process (ProcessId, getSelfPid)
+import Control.Distributed.Process (ProcessId, getSelfPid, wrapMessage, unwrapMessage)
 import Control.Distributed.Process.Serializable
 
 import Simulation.Aivika.Trans hiding (ProcessId)
@@ -62,21 +56,14 @@ enqueueMessage pid t a =
         sender <- liftComp $ liftDistributedUnsafe $ getSelfPid
         let receiver = pid
             antiToggle = False
-            binaryData = encode a
-            decodedData :: forall b. Serializable b => b
-            decodedData = unsafeCoerce a
-            binaryFingerprint = encodeFingerprint decodedFingerprint
-            decodedFingerprint = fingerprint a
+            binaryData = wrapMessage a
             message = Message { messageSequenceNo = sequenceNo,
                                 messageSendTime = sendTime,
                                 messageReceiveTime = receiveTime,
                                 messageSender = sender,
                                 messageReceiver = receiver,
                                 messageAntiToggle = antiToggle,
-                                messageBinaryData = binaryData,
-                                messageDecodedData = decodedData,
-                                messageBinaryFingerprint = binaryFingerprint,
-                                messageDecodedFingerprint = decodedFingerprint
+                                messageData = binaryData
                               }
         OMQ.sendMessage queue message
 
@@ -125,19 +112,15 @@ expectMessageTimeout timeout signal =
 -- | The signal triggered when the remote message of the specified type has come.
 messageReceived :: forall a. Serializable a => Signal DIO a
 messageReceived =
-  let f = fingerprint (undefined :: a)
-  in Signal { handleSignal = \h ->
-               Event $ \p ->
-               let queue = queueInputMessages $
-                           runEventQueue (pointRun p)
-                   signal = IMQ.messageEnqueued queue
-               in invokeEvent p $
-                  handleSignal signal $ \x ->
-                  when (f == messageDecodedFingerprint x) $
-                  let decoded :: a
-                      decoded = messageDecodedData x
-                  in decoded `seq` h decoded
-            }
-                      
-                        
-  
+  Signal { handleSignal = \h ->
+            Event $ \p ->
+            let queue = queueInputMessages $
+                        runEventQueue (pointRun p)
+                signal = IMQ.messageEnqueued queue
+            in invokeEvent p $
+               handleSignal signal $ \x ->
+               do y <- unwrapMessage (messageData x)
+                  case y of
+                    Nothing -> return ()
+                    Just a  -> h a
+         }

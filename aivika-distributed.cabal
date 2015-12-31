@@ -53,7 +53,7 @@ library
                      FlexibleContexts,
                      TypeFamilies,
                      RankNTypes,
-                     ScopedTypeVariables
+                     DeriveGeneric
 
     ghc-options:     -O2
 
