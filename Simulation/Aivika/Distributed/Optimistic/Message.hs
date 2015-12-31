@@ -63,6 +63,7 @@ enqueueMessage pid t a =
         let receiver = pid
             antiToggle = False
             binaryData = encode a
+            decodedData :: forall b. Serializable b => b
             decodedData = unsafeCoerce a
             binaryFingerprint = encodeFingerprint decodedFingerprint
             decodedFingerprint = fingerprint a
