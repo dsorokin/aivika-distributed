@@ -12,8 +12,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
-        liftDistributedUnsafe,
-        defaultDIOParams) where
+        runDIO,
+        liftDistributedUnsafe) where
 
 import Control.Applicative
 import Control.Monad

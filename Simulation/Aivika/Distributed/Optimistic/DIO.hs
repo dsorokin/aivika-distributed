@@ -13,8 +13,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
-        DIOParams(..),
-        defaultDIOParams) where
+        runDIO) where
 
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.DES
