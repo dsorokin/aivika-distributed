@@ -19,13 +19,13 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
 import Control.Exception (throw)
-import Control.Distributed.Process (Process, catch, finally)
+import Control.Distributed.Process (Process, ProcessId, catch, finally)
 
 import Simulation.Aivika.Trans.Exception
 
 -- | The distributed computation based on 'IO'.
-newtype DIO a = DIO { runDIO :: DIOParams -> Process a
-                      -- ^ Run the computation.
+newtype DIO a = DIO { unDIO :: DIOParams -> Process a
+                      -- ^ Unwrap the computation.
                     }
 
 -- | The parameters for the 'DIO' computation.
@@ -42,7 +42,7 @@ instance Monad DIO where
   {-# INLINE (>>=) #-}
   (DIO m) >>= k = DIO $ \ps ->
     m ps >>= \a ->
-    let m' = runDIO (k a) in m' ps
+    let m' = unDIO (k a) in m' ps
 
 instance Applicative DIO where
 
@@ -60,7 +60,7 @@ instance Functor DIO where
 instance MonadException DIO where
 
   catchComp (DIO m) h = DIO $ \ps ->
-    catch (m ps) (\e -> runDIO (h e) ps)
+    catch (m ps) (\e -> unDIO (h e) ps)
 
   finallyComp (DIO m1) (DIO m2) = DIO $ \ps ->
     finally (m1 ps) (m2 ps)
@@ -76,3 +76,7 @@ defaultDIOParams =
 -- | Lift the distributed 'Process' computation.
 liftDistributedUnsafe :: Process a -> DIO a
 liftDistributedUnsafe = DIO . const
+
+-- | Run the computation.
+runDIO :: DIO () -> Process ProcessId
+runDIO = undefined
