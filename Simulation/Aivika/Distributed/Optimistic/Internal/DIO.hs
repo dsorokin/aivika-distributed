@@ -23,6 +23,10 @@ import Control.Distributed.Process (Process, ProcessId, catch, finally)
 
 import Simulation.Aivika.Trans.Exception
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
+import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+
 -- | The distributed computation based on 'IO'.
 newtype DIO a = DIO { unDIO :: DIOParams -> Process a
                       -- ^ Unwrap the computation.
@@ -30,8 +34,8 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioParamRecallTimeout :: Int
-              -- The timeout in milliseconds for delivering an anti-message.
+  DIOParams { dioChannel :: Channel DIOMessage
+              -- The channel of messages.
             }
 
 instance Monad DIO where
@@ -68,11 +72,6 @@ instance MonadException DIO where
   throwComp e = DIO $ \ps ->
     throw e
 
--- | The default 'DIO' parameters.
-defaultDIOParams :: DIOParams
-defaultDIOParams =
-  DIOParams { dioParamRecallTimeout = 60000 }
-
 -- | Lift the distributed 'Process' computation.
 liftDistributedUnsafe :: Process a -> DIO a
 liftDistributedUnsafe = DIO . const
@@ -80,3 +79,8 @@ liftDistributedUnsafe = DIO . const
 -- | Run the computation.
 runDIO :: DIO () -> Process ProcessId
 runDIO = undefined
+
+-- | The message type.
+data DIOMessage = DIOQueueMessage Message
+                | DIOGlobalTimeMessage GlobalTimeMessage
+                | DIOLocalTimeMessageResp LocalTimeMessageResp
