@@ -20,6 +20,7 @@ import Data.IORef
 
 import Control.Monad
 import Control.Monad.Trans
+import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Vector
 import Simulation.Aivika.Trans.Comp
@@ -89,3 +90,15 @@ generateMessageSequenceNo q =
      let n' = n + 1
      n' `seq` liftIOUnsafe $ writeIORef (outputMessageSequenceNo q) n'
      return n
+
+-- | Deliver the message on low level.
+deliverMessage :: Message -> DIO ()
+deliverMessage x =
+  liftDistributedUnsafe $
+  DP.send (messageReceiver x) x
+
+-- | Deliver the anti-message on low level.
+deliverAntiMessage :: Message -> DIO ()
+deliverAntiMessage x =
+  liftDistributedUnsafe $
+  DP.send (messageReceiver x) x

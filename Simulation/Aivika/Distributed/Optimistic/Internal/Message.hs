@@ -14,9 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
-        antiMessages,
-        deliverMessage,
-        deliverAntiMessage) where
+        antiMessages) where
 
 import GHC.Generics
 
@@ -25,8 +23,6 @@ import Data.Binary
 
 import qualified Control.Distributed.Process as DP
 import Control.Distributed.Process.Serializable
-
-import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 -- | Represents a message.
 data Message =
@@ -71,17 +67,3 @@ instance Eq Message where
     (messageSender x == messageSender y) &&
     (messageReceiver x == messageReceiver y) &&
     (messageAntiToggle x == messageAntiToggle y)
-
--- | Deliver the message on low level.
-deliverMessage :: Message -> DIO ()
-deliverMessage x =
-  liftDistributedUnsafe $
-  DP.send (messageReceiver x) x
-
--- | Similar to 'deliverMessage' but has a timeout whithin which
--- the delivery can be repeated in case of failure as we have
--- to deliver the anti-message as soon as possible.
-deliverAntiMessage :: Message -> DIO ()
-deliverAntiMessage x =
-  liftDistributedUnsafe $
-  DP.send (messageReceiver x) x
