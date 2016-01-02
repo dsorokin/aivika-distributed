@@ -50,13 +50,16 @@ instance EventQueueing DIO where
                  -- ^ the underlying priority queue
                  queueBusy :: R.Ref Bool,
                  -- ^ whether the queue is currently processing events
-                 queueTime :: R.Ref Double
+                 queueTime :: R.Ref Double,
                  -- ^ the actual time of the event queue
+                 queueGlobalTime :: IORef Double
+                 -- ^ the global time
                }
 
   newEventQueue specs =
     do f <- R.newRef0 False
        t <- R.newRef0 $ spcStartTime specs
+       gt <- liftIOUnsafe $ newIORef $ spcStartTime specs
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
        output <- newOutputMessageQueue
@@ -66,7 +69,8 @@ instance EventQueueing DIO where
                            queueLog  = log,
                            queuePQ   = pq,
                            queueBusy = f,
-                           queueTime = t }
+                           queueTime = t,
+                           queueGlobalTime = gt }
 
   enqueueEvent t (Event m) =
     Event $ \p ->
