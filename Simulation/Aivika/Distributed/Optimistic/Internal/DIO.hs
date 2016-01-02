@@ -101,5 +101,10 @@ dioTimeServerId = DIO $ return . dioParamTimeServerId
 
 -- | The message type.
 data DIOMessage = DIOQueueMessage Message
+                  -- ^ the message has come from the remote process
                 | DIOGlobalTimeMessage GlobalTimeMessage
+                  -- ^ the time server sent a global time
                 | DIOLocalTimeMessageResp LocalTimeMessageResp
+                  -- ^ the time server responded to our notification about the local time
+                | DIOTerminateMessage
+                  -- ^ the time server asked to terminate the process
