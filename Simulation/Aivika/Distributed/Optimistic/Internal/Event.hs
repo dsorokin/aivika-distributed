@@ -22,13 +22,16 @@ import Data.IORef
 
 import Control.Monad
 import Control.Monad.Trans
+import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Trans.Internal.Types
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
@@ -196,3 +199,75 @@ expectInputMessageTimeout = undefined
 -- | Process an input message.
 processInputMessage :: Event DIO ()
 processInputMessage = undefined
+
+-- | Process the message channel.
+processChannel :: Event DIO ()
+processChannel =
+  do ch <- liftComp dioChannel
+     f  <- liftIOUnsafe $ channelEmpty ch
+     unless f $
+       do xs <- liftIOUnsafe $ readChannel ch
+          forM_ xs processChannelMessage
+
+-- | Process the channel message
+processChannelMessage :: DIOMessage -> Event DIO ()
+processChannelMessage (DIOQueueMessage m) =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     liftDistributedUnsafe $
+       DP.say $
+       (if messageAntiToggle m
+        then "Received the anti-message at local time "
+        else "Received the event message at local time ") ++
+       (show $ pointTime p) ++
+       " with receive time " ++
+       (show $ messageReceiveTime m) ++
+       " and sender time " ++
+       (show $ messageSendTime m)
+     ---
+     invokeEvent p $ enqueueMessage (queueInputMessages q) m
+processChannelMessage (DIOGlobalTimeMessage m) =
+  Event $ \p ->
+  do let q  = runEventQueue $ pointRun p
+         tg = queueGlobalTime q
+         tl = queueTime q
+     ---
+     liftDistributedUnsafe $
+       DP.say $
+       "Received a message with global time " ++
+       (show $ globalTimeValue m) ++
+       " at local time " ++
+       (show $ pointTime p)
+     ---
+     liftIOUnsafe $
+       writeIORef tg (globalTimeValue m)
+     t   <- invokeEvent p $ R.readRef tl
+     pid <- dioTimeServerId
+     liftDistributedUnsafe $
+       DP.send pid (GlobalTimeMessageResp t)
+processChannelMessage (DIOLocalTimeMessageResp m) =
+  Event $ \p ->
+  do let q  = runEventQueue $ pointRun p
+         tg = queueGlobalTime q
+     ---
+     liftDistributedUnsafe $
+       DP.say $
+       "Received a response with global time " ++
+       (show $ localTimeRespValue m) ++
+       " at local time " ++
+       (show $ pointTime p)
+     ---
+     liftIOUnsafe $
+       writeIORef tg (localTimeRespValue m)
+processChannelMessage DIOTerminateMessage =
+  Event $ \p ->
+  do ---
+     liftDistributedUnsafe $
+       DP.say $
+       "Received a terminating message at local time " ++
+       (show $ pointTime p)
+     ---
+     liftDistributedUnsafe $
+       DP.terminate
+ 

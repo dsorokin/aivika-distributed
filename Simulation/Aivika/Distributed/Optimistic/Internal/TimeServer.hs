@@ -13,10 +13,10 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServer,
-        GlobalTimeMessage,
-        GlobalTimeMessageResp,
-        LocalTimeMessage,
-        LocalTimeMessageResp) where
+        GlobalTimeMessage(..),
+        GlobalTimeMessageResp(..),
+        LocalTimeMessage(..),
+        LocalTimeMessageResp(..)) where
 
 import GHC.Generics
 

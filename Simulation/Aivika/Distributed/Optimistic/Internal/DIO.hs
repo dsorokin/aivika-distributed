@@ -12,6 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams,
+        DIOMessage(..),
         runDIO,
         dioChannel,
         dioReceiverId,
