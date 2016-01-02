@@ -11,8 +11,11 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
-        DIOParams(..),
+        DIOParams,
         runDIO,
+        dioChannel,
+        dioReceiverId,
+        dioTimeServerId,
         liftDistributedUnsafe) where
 
 import Control.Applicative
@@ -34,8 +37,12 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioChannel :: Channel DIOMessage
+  DIOParams { dioParamChannel :: Channel DIOMessage,
               -- The channel of messages.
+              dioParamReceiverId :: ProcessId,
+              -- The receiver process
+              dioParamTimeServerId :: ProcessId
+              -- The time server process
             }
 
 instance Monad DIO where
@@ -79,6 +86,18 @@ liftDistributedUnsafe = DIO . const
 -- | Run the computation.
 runDIO :: DIO () -> Process ProcessId
 runDIO = undefined
+
+-- | Return the chanel of messages.
+dioChannel :: DIO (Channel DIOMessage)
+dioChannel = DIO $ return . dioParamChannel
+
+-- | Return the receiver process identifier.
+dioReceiverId :: DIO ProcessId
+dioReceiverId = DIO $ return . dioParamReceiverId
+
+-- | Return the time server process identifier.
+dioTimeServerId :: DIO ProcessId
+dioTimeServerId = DIO $ return . dioParamTimeServerId
 
 -- | The message type.
 data DIOMessage = DIOQueueMessage Message
