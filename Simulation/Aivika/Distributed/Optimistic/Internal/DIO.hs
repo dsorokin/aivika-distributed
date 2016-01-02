@@ -38,11 +38,11 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
   DIOParams { dioParamChannel :: Channel DIOMessage,
-              -- The channel of messages.
+              -- ^ The channel of messages.
               dioParamReceiverId :: ProcessId,
-              -- The receiver process
+              -- ^ The receiver process
               dioParamTimeServerId :: ProcessId
-              -- The time server process
+              -- ^ The time server process
             }
 
 instance Monad DIO where
