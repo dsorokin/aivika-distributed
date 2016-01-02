@@ -32,9 +32,9 @@ data Message =
             -- ^ The send time.
             messageReceiveTime :: Double,
             -- ^ The receive time.
-            messageSender :: DP.ProcessId,
+            messageSenderId :: DP.ProcessId,
             -- ^ The sender of the message.
-            messageReceiver :: DP.ProcessId,
+            messageReceiverId :: DP.ProcessId,
             -- ^ The receiver of the message.
             messageAntiToggle :: Bool,
             -- ^ Whether this is an anti-message.
@@ -54,8 +54,8 @@ antiMessages x y =
   (messageSequenceNo x == messageSequenceNo y) &&
   (messageSendTime x == messageSendTime y) &&
   (messageReceiveTime x == messageReceiveTime y) &&
-  (messageSender x == messageSender y) &&
-  (messageReceiver x == messageReceiver y) &&
+  (messageSenderId x == messageSenderId y) &&
+  (messageReceiverId x == messageReceiverId y) &&
   (messageAntiToggle x /= messageAntiToggle y)
 
 instance Eq Message where
@@ -64,6 +64,6 @@ instance Eq Message where
     (messageSequenceNo x == messageSequenceNo y) &&
     (messageSendTime x == messageSendTime y) &&
     (messageReceiveTime x == messageReceiveTime y) &&
-    (messageSender x == messageSender y) &&
-    (messageReceiver x == messageReceiver y) &&
+    (messageSenderId x == messageSenderId y) &&
+    (messageReceiverId x == messageReceiverId y) &&
     (messageAntiToggle x == messageAntiToggle y)

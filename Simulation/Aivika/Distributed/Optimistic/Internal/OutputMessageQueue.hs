@@ -95,10 +95,10 @@ generateMessageSequenceNo q =
 deliverMessage :: Message -> DIO ()
 deliverMessage x =
   liftDistributedUnsafe $
-  DP.send (messageReceiver x) x
+  DP.send (messageReceiverId x) x
 
 -- | Deliver the anti-message on low level.
 deliverAntiMessage :: Message -> DIO ()
 deliverAntiMessage x =
   liftDistributedUnsafe $
-  DP.send (messageReceiver x) x
+  DP.send (messageReceiverId x) x

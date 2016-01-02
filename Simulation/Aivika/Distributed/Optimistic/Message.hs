@@ -53,15 +53,15 @@ enqueueMessage pid t a =
      do sequenceNo <- OMQ.generateMessageSequenceNo queue
         let sendTime    = pointTime p
             receiveTime = t
-        sender <- liftComp $ liftDistributedUnsafe $ getSelfPid
+        sender <- liftComp dioReceiverId
         let receiver = pid
             antiToggle = False
             binaryData = wrapMessage a
             message = Message { messageSequenceNo = sequenceNo,
                                 messageSendTime = sendTime,
                                 messageReceiveTime = receiveTime,
-                                messageSender = sender,
-                                messageReceiver = receiver,
+                                messageSenderId = sender,
+                                messageReceiverId = receiver,
                                 messageAntiToggle = antiToggle,
                                 messageData = binaryData
                               }
