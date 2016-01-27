@@ -24,6 +24,8 @@ import Control.Monad
 import Control.Monad.Trans
 import qualified Control.Distributed.Process as DP
 
+import qualified Simulation.Aivika.PriorityQueue.Pure as PQ
+
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Trans.Internal.Types
 
@@ -36,7 +38,6 @@ import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMes
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref as R
-import qualified Simulation.Aivika.Distributed.Optimistic.PriorityQueue as PQ
 
 -- | An implementation of the 'EventQueueing' type class.
 instance EventQueueing DIO where
