@@ -9,9 +9,9 @@
 -- Stability  : experimental
 -- Tested with: GHC 7.10.3
 --
--- This module defines some queue strategy instances.
+-- This module defines queue strategies 'FCFS' and 'LCFS' for the 'DIO' computation.
 --
-module Simulation.Aivika.Distributed.Optimistic.QueueStrategy where
+module Simulation.Aivika.Distributed.Optimistic.QueueStrategy () where
 
 import Control.Monad.Trans
 
