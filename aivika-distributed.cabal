@@ -46,7 +46,7 @@ library
                      time >= 1.5.0.1,
                      distributed-process >= 0.5.5.1,
                      aivika >= 4.3.2,
-                     aivika-transformers >= 4.3.1
+                     aivika-transformers >= 4.3.2
 
     extensions:      MultiParamTypeClasses,
                      FlexibleInstances,
