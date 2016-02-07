@@ -9,7 +9,8 @@
 -- Stability  : experimental
 -- Tested with: GHC 7.10.3
 --
--- The implementation of mutable references.
+-- Here is an implementation of mutable references, where
+-- 'DIO' is an instance of 'MonadRef' and 'MonadRef0'.
 --
 module Simulation.Aivika.Distributed.Optimistic.Ref.Base () where
 
