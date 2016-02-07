@@ -19,11 +19,13 @@ import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Trans.Signal
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 data InputMessageQueue
 
-newInputMessageQueue :: (Double -> DIO ())
+newInputMessageQueue :: UndoableLog
+                        -> (Double -> DIO ())
                         -> (Double -> DIO ())
                         -> DIO InputMessageQueue
 

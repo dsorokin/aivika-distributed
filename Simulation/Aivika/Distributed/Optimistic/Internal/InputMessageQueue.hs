@@ -27,15 +27,19 @@ import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Dynamics
 import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Trans.Signal
+import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
 data InputMessageQueue =
-  InputMessageQueue { inputMessageRollbackPre :: Double -> DIO (),
+  InputMessageQueue { inputMessageLog :: UndoableLog,
+                      -- ^ the Redo/Undo log.
+                      inputMessageRollbackPre :: Double -> DIO (),
                       -- ^ Rollback the operations till the specified time before actual changes.
                       inputMessageRollbackPost :: Double -> DIO (),
                       -- ^ Rollback the operations till the specified time after actual changes.
@@ -51,21 +55,24 @@ data InputMessageQueue =
 data InputMessageQueueItem =
   InputMessageQueueItem { itemMessage :: Message,
                           -- ^ The item message.
-                          itemEvent :: IORef (Maybe (EventCancellation DIO))
-                          -- ^ A cancellable event for the item.
+                          itemActivated :: IORef Bool
+                          -- ^ Whether the item is activated.
                         }
 
 -- | Create a new input message queue.
-newInputMessageQueue :: (Double -> DIO ())
+newInputMessageQueue :: UndoableLog
+                        -- ^ the Redo/Undo log
+                        -> (Double -> DIO ())
                         -- ^ rollback operations till the specified time before actual changes
                         -> (Double -> DIO ())
                         -- ^ rollback operations till the specified time after actual changes
                         -> DIO InputMessageQueue
-newInputMessageQueue rollbackPre rollbackPost =
+newInputMessageQueue log rollbackPre rollbackPost =
   do ms <- liftIOUnsafe newVector
      r  <- liftIOUnsafe $ newIORef 0
      s  <- newSignalSource0
-     return InputMessageQueue { inputMessageRollbackPre = rollbackPre,
+     return InputMessageQueue { inputMessageLog = log,
+                                inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
                                 inputMessageSource = s,
                                 inputMessages = ms,
@@ -78,33 +85,37 @@ messageEnqueued q = publishSignal (inputMessageSource q)
 -- | Enqueue a new message ignoring the duplicated messages.
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
 enqueueMessage q m =
+  Event $ \p ->
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
-     t0 <- liftDynamics time
-     let t = messageReceiveTime m
+     let t  = messageReceiveTime m
      (i, f) <- liftIOUnsafe $ findAntiMessage q m
      case f of
        Nothing -> return ()
        Just f  ->
-         if i < i0 || t < t0
+         if i < i0 || t < pointTime p
          then do i' <- liftIOUnsafe $ leftMessageIndex q m i
-                 let t' = messageReceiveTime m
-                 liftComp $
-                   inputMessageRollbackPre q t'
+                 let sc = pointSpecs p
+                     t0 = spcStartTime sc
+                     dt = spcDT sc
+                     t' = messageReceiveTime m
+                     n' = fromIntegral $ floor ((t' - t0) / dt)
+                     p' = p { pointTime = t',
+                              pointIteration = n',
+                              pointPhase = -1 }
+                 inputMessageRollbackPre q t'
                  liftIOUnsafe $
                    writeIORef (inputMessageIndex q) i'
-                 n <- liftIOUnsafe $ vectorCount (inputMessages q)
-                 forM_ [i' .. n-1] $ unregisterMessage q
                  if f
-                   then annihilateMessage q i
+                   then invokeEvent p' $ annihilateMessage q i
                    else liftIOUnsafe $ insertMessage q m i
                  n <- liftIOUnsafe $ vectorCount (inputMessages q)
-                 forM_ [i' .. n-1] $ registerMessage q
-                 liftComp $
-                   inputMessageRollbackPost q t'
+                 forM_ [i' .. n-1] $
+                   invokeEvent p' . activateMessage q
+                 inputMessageRollbackPost q t'
          else if f
-              then annihilateMessage q i
+              then invokeEvent p $ annihilateMessage q i
               else do liftIOUnsafe $ insertMessage q m i
-                      registerMessage q i
+                      invokeEvent p $ activateMessage q i
 
 -- | Return the leftmost index for the current message.
 leftMessageIndex :: InputMessageQueue -> Message -> Int -> IO Int
@@ -153,35 +164,27 @@ annihilateMessage :: InputMessageQueue -> Int -> Event DIO ()
 annihilateMessage q i =
   do item <- liftIOUnsafe $ readVector (inputMessages q) i
      liftIOUnsafe $ vectorDeleteAt (inputMessages q) i
-     x <- liftIOUnsafe $ readIORef (itemEvent item)
-     case x of
-       Nothing -> return ()
-       Just e  -> cancelEvent e
+     liftIOUnsafe $ writeIORef (itemActivated item) False
 
--- | Register a message at the specified index.
-registerMessage :: InputMessageQueue -> Int -> Event DIO ()
-registerMessage q i =
+-- | Activate a message at the specified index.
+activateMessage :: InputMessageQueue -> Int -> Event DIO ()
+activateMessage q i =
   do item <- liftIOUnsafe $ readVector (inputMessages q) i
      let m = itemMessage item
-     e <- enqueueEventWithCancellation (messageReceiveTime m) $
-          do liftIOUnsafe $ modifyIORef' (inputMessageIndex q) (+ 1)
-             unless (messageAntiToggle m) $
-               triggerSignal (inputMessageSource q) m
-     liftIOUnsafe $ writeIORef (itemEvent item) (Just e)
-
--- | Unregister a message at the specified index.
-unregisterMessage :: InputMessageQueue -> Int -> Event DIO ()
-unregisterMessage q i =
-  do item <- liftIOUnsafe $ readVector (inputMessages q) i
-     x <- liftIOUnsafe $ readIORef (itemEvent item)
-     case x of
-       Nothing -> return ()
-       Just e  -> cancelEvent e
+     f <- liftIOUnsafe $ readIORef (itemActivated item)
+     unless f $
+       do liftIOUnsafe $ writeIORef (itemActivated item) True
+          writeLog (inputMessageLog q) $
+            liftIOUnsafe $ writeIORef (itemActivated item) False
+          enqueueEvent (messageReceiveTime m) $
+            do f <- liftIOUnsafe $ readIORef (itemActivated item)
+               when f $
+                 triggerSignal (inputMessageSource q) m
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 insertMessage q m i =
-  do r <- newIORef Nothing
+  do r <- newIORef False
      let item = InputMessageQueueItem m r
      vectorInsert (inputMessages q) i item
 

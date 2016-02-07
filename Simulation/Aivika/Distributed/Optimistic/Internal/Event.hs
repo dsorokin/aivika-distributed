@@ -67,7 +67,7 @@ instance EventQueueing DIO where
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
        output <- newOutputMessageQueue
-       input <- newInputMessageQueue (rollbackLog log) (rollbackMessages output)
+       input <- newInputMessageQueue log (rollbackLog log) (rollbackMessages output)
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueLog  = log,
