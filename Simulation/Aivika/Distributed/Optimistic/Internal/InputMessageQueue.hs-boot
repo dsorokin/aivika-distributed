@@ -23,8 +23,8 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 data InputMessageQueue
 
-newInputMessageQueue :: (Double -> Event DIO ())
-                        -> (Double -> Event DIO ())
+newInputMessageQueue :: (Double -> DIO ())
+                        -> (Double -> DIO ())
                         -> DIO InputMessageQueue
 
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()

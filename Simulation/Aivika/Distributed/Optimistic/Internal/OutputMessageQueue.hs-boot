@@ -26,7 +26,7 @@ data OutputMessageQueue
 
 newOutputMessageQueue :: DIO OutputMessageQueue
 
-sendMessage :: OutputMessageQueue -> Message -> Event DIO ()
+sendMessage :: OutputMessageQueue -> Message -> DIO ()
 
-rollbackMessages :: OutputMessageQueue -> Double -> Event DIO ()
+rollbackMessages :: OutputMessageQueue -> Double -> DIO ()
 

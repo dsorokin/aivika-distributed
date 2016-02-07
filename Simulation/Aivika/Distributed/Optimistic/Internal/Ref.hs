@@ -22,6 +22,7 @@ import Data.IORef
 import Control.Monad
 import Control.Monad.Trans
 
+import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -37,9 +38,7 @@ instance Eq (Ref a) where
 
 -- | Create a new reference.
 newRef :: a -> Simulation DIO (Ref a)
-newRef a =
-  do x <- liftIOUnsafe $ newIORef a
-     return Ref { refValue = x }
+newRef = liftComp . newRef0
 
 -- | Create a new reference.
 newRef0 :: a -> DIO (Ref a)
@@ -65,9 +64,9 @@ writeRef r a = Event $ \p ->
 -- | Mutate the contents of the reference.
 modifyRef :: Ref a -> (a -> a) -> Event DIO ()
 modifyRef r f = Event $ \p ->
-  do a <- liftIOUnsafe $ readIORef (refValue r)
-     let b   = f a
-         log = queueLog $ runEventQueue (pointRun p)
+  do let log = queueLog $ runEventQueue (pointRun p)
+     a <- liftIOUnsafe $ readIORef (refValue r)
+     let b = f a
      invokeEvent p $
        writeLog log $
        liftIOUnsafe $ writeIORef (refValue r) a

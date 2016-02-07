@@ -35,9 +35,9 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
 data InputMessageQueue =
-  InputMessageQueue { inputMessageRollbackPre :: Double -> Event DIO (),
+  InputMessageQueue { inputMessageRollbackPre :: Double -> DIO (),
                       -- ^ Rollback the operations till the specified time before actual changes.
-                      inputMessageRollbackPost :: Double -> Event DIO (),
+                      inputMessageRollbackPost :: Double -> DIO (),
                       -- ^ Rollback the operations till the specified time after actual changes.
                       inputMessageSource :: SignalSource DIO Message,
                       -- ^ The message source.
@@ -56,9 +56,9 @@ data InputMessageQueueItem =
                         }
 
 -- | Create a new input message queue.
-newInputMessageQueue :: (Double -> Event DIO ())
+newInputMessageQueue :: (Double -> DIO ())
                         -- ^ rollback operations till the specified time before actual changes
-                        -> (Double -> Event DIO ())
+                        -> (Double -> DIO ())
                         -- ^ rollback operations till the specified time after actual changes
                         -> DIO InputMessageQueue
 newInputMessageQueue rollbackPre rollbackPost =
@@ -81,35 +81,37 @@ enqueueMessage q m =
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
      t0 <- liftDynamics time
      let t = messageReceiveTime m
-     (i, f) <- findAntiMessage q m
+     (i, f) <- liftIOUnsafe $ findAntiMessage q m
      case f of
        Nothing -> return ()
        Just f  ->
          if i < i0 || t < t0
-         then do i' <- leftMessageIndex q m i
+         then do i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m
-                 inputMessageRollbackPre q t'
+                 liftComp $
+                   inputMessageRollbackPre q t'
                  liftIOUnsafe $
                    writeIORef (inputMessageIndex q) i'
                  n <- liftIOUnsafe $ vectorCount (inputMessages q)
                  forM_ [i' .. n-1] $ unregisterMessage q
                  if f
                    then annihilateMessage q i
-                   else insertMessage q m i
+                   else liftIOUnsafe $ insertMessage q m i
                  n <- liftIOUnsafe $ vectorCount (inputMessages q)
                  forM_ [i' .. n-1] $ registerMessage q
-                 inputMessageRollbackPost q t'
+                 liftComp $
+                   inputMessageRollbackPost q t'
          else if f
               then annihilateMessage q i
-              else do insertMessage q m i
+              else do liftIOUnsafe $ insertMessage q m i
                       registerMessage q i
 
 -- | Return the leftmost index for the current message.
-leftMessageIndex :: InputMessageQueue -> Message -> Int -> Event DIO Int
+leftMessageIndex :: InputMessageQueue -> Message -> Int -> IO Int
 leftMessageIndex q m i
   | i == 0    = return 0
   | otherwise = do let i' = i - 1
-                   item' <- liftIOUnsafe $ readVector (inputMessages q) i'
+                   item' <- readVector (inputMessages q) i'
                    let m' = itemMessage item'
                        t  = messageReceiveTime m
                        t' = messageReceiveTime m'
@@ -119,26 +121,26 @@ leftMessageIndex q m i
                           then return i
                           else leftMessageIndex q m i'
 
--- | Find an anti- message and return an index with 'True'; otherwise,
--- return the rightmost index within the current receive time with 'False'.
+-- | Find an anti-message and return the index with 'True'; otherwise,
+-- return the insertion index within the current receive time with 'False'.
 --
 -- The second result is 'Nothing' if the message is duplicated.
-findAntiMessage :: InputMessageQueue -> Message -> Event DIO (Int, Maybe Bool)
+findAntiMessage :: InputMessageQueue -> Message -> IO (Int, Maybe Bool)
 findAntiMessage q m =
   do right <- lookupRightMessageIndex q m
      if right < 0
        then return (- right - 1, Just False)
        else let loop i
-                  | i < 0     = return (right, Just False)
+                  | i < 0     = return (right + 1, Just False)
                   | otherwise =
-                    do item <- liftIOUnsafe $ readVector (inputMessages q) i
+                    do item <- readVector (inputMessages q) i
                        let m' = itemMessage item
                            t  = messageReceiveTime m
                            t' = messageReceiveTime m'
                        if t' > t
                          then error "Incorrect index: findAntiMessage"
                          else if t' < t
-                              then return (right, Just False)
+                              then return (right + 1, Just False)
                               else if antiMessages m m'
                                    then return (i, Just True)
                                    else if m == m'
@@ -177,20 +179,20 @@ unregisterMessage q i =
        Just e  -> cancelEvent e
 
 -- | Insert a new message.
-insertMessage :: InputMessageQueue -> Message -> Int -> Event DIO ()
+insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 insertMessage q m i =
-  do r <- liftIOUnsafe $ newIORef Nothing
+  do r <- newIORef Nothing
      let item = InputMessageQueueItem m r
-     liftIOUnsafe $ vectorInsert (inputMessages q) i item
+     vectorInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
-lookupRightMessageIndex' :: InputMessageQueue -> Message -> Int -> Int -> Event DIO Int
+lookupRightMessageIndex' :: InputMessageQueue -> Message -> Int -> Int -> IO Int
 lookupRightMessageIndex' q m left right =
   if left > right
   then return $ - (right + 1) - 1
   else  
     do let index = ((left + 1) + right) `div` 2
-       item <- liftIOUnsafe $ readVector (inputMessages q) index
+       item <- readVector (inputMessages q) index
        let m' = itemMessage item
            t  = messageReceiveTime m
            t' = messageReceiveTime m'
@@ -203,7 +205,7 @@ lookupRightMessageIndex' q m left right =
                    else lookupRightMessageIndex' q m index right
  
 -- | Search for the rightmost message index.
-lookupRightMessageIndex :: InputMessageQueue -> Message -> Event DIO Int
+lookupRightMessageIndex :: InputMessageQueue -> Message -> IO Int
 lookupRightMessageIndex q m =
-  do n <- liftIOUnsafe $ vectorCount (inputMessages q)
+  do n <- vectorCount (inputMessages q)
      lookupRightMessageIndex' q m 0 (n - 1)

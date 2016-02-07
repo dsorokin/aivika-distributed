@@ -48,25 +48,24 @@ sendMessage pid a =
 enqueueMessage :: forall a. Serializable a => ProcessId -> Double -> a -> Event DIO ()
 enqueueMessage pid t a =
   Event $ \p ->
-  let queue = queueOutputMessages $
-              runEventQueue (pointRun p)
-  in invokeEvent p $
-     do sequenceNo <- OMQ.generateMessageSequenceNo queue
-        let sendTime    = pointTime p
-            receiveTime = t
-        sender <- liftComp dioReceiverId
-        let receiver = pid
-            antiToggle = False
-            binaryData = wrapMessage a
-            message = Message { messageSequenceNo = sequenceNo,
-                                messageSendTime = sendTime,
-                                messageReceiveTime = receiveTime,
-                                messageSenderId = sender,
-                                messageReceiverId = receiver,
-                                messageAntiToggle = antiToggle,
-                                messageData = binaryData
-                              }
-        OMQ.sendMessage queue message
+  do let queue       = queueOutputMessages $
+                       runEventQueue (pointRun p)
+         sendTime    = pointTime p
+         receiveTime = t
+     sequenceNo <- liftIOUnsafe $ OMQ.generateMessageSequenceNo queue
+     sender <- dioReceiverId
+     let receiver = pid
+         antiToggle = False
+         binaryData = wrapMessage a
+         message = Message { messageSequenceNo = sequenceNo,
+                             messageSendTime = sendTime,
+                             messageReceiveTime = receiveTime,
+                             messageSenderId = sender,
+                             messageReceiverId = receiver,
+                             messageAntiToggle = antiToggle,
+                             messageData = binaryData
+                           }
+     OMQ.sendMessage queue message
 
 -- | Blocks the simulation until the specified signal is triggered which
 -- must depend directly or indirectly on the 'messageReceived' signal.

@@ -21,9 +21,7 @@ import Control.Monad.Trans
 
 import qualified Simulation.Aivika.DoubleLinkedList as DLL
 import Simulation.Aivika.Trans.Comp
-import Simulation.Aivika.Trans.Simulation
-import Simulation.Aivika.Trans.Dynamics
-import Simulation.Aivika.Trans.Event
+import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
@@ -49,24 +47,25 @@ newUndoableLog =
 
 -- | Write a new undoable operation.
 writeLog :: UndoableLog -> DIO () -> Event DIO ()
+{-# INLINE writeLog #-}
 writeLog log h =
-  do t <- liftDynamics time
-     let x = UndoableItem { itemTime = t, itemUndo = h }
-     liftIOUnsafe $ DLL.listAddLast (logItems log) x
+  Event $ \p ->
+  let x = UndoableItem { itemTime = pointTime p, itemUndo = h }
+  in liftIOUnsafe $ DLL.listAddLast (logItems log) x
 
 -- | Rollback the log till the specified time including that one.
-rollbackLog :: UndoableLog -> Double -> Event DIO ()
+rollbackLog :: UndoableLog -> Double -> DIO ()
 rollbackLog log t =
   do f <- liftIOUnsafe $ DLL.listNull (logItems log)
      unless f $
        do x <- liftIOUnsafe $ DLL.listLast (logItems log)
           when (t <= itemTime x) $
             do liftIOUnsafe $ DLL.listRemoveLast (logItems log)
-               liftComp (itemUndo x)
+               itemUndo x
                rollbackLog log t
 
 -- | Reduce the log removing all items older than the specified time.
-reduceLog :: UndoableLog -> Double -> Event DIO ()
+reduceLog :: UndoableLog -> Double -> DIO ()
 reduceLog log t =
   do f <- liftIOUnsafe $ DLL.listNull (logItems log)
      unless f $
