@@ -20,6 +20,7 @@ module Simulation.Aivika.Distributed.Optimistic.Message
         messageReceived) where
 
 import Data.Time
+import Data.Monoid
 
 import Control.Monad
 import Control.Distributed.Process (ProcessId, getSelfPid, wrapMessage, unwrapMessage)
@@ -85,11 +86,10 @@ expectMessage signal =
 -- | Like 'expectMessage' but with a timeout in milliseconds.
 expectMessageTimeout :: Int -> Signal DIO a -> Process DIO (Maybe a)
 expectMessageTimeout timeout signal =
-  do t0   <- liftComp $ liftIOUnsafe getCurrentTime
-     src  <- liftSimulation newSignalSource
-     pid1 <- liftSimulation newProcessId
-     pid2 <- liftSimulation newProcessId
-     spawnProcessUsingIdWith CancelChildAfterParent pid1 $
+  do t0  <- liftComp $ liftIOUnsafe getCurrentTime
+     src <- liftSimulation newSignalSource
+     pid <- liftSimulation newProcessId
+     spawnProcessUsingIdWith CancelChildAfterParent pid $
        let loop dt =
              do liftEvent $ expectInputMessageTimeout dt
                 when (dt > 0) $
@@ -100,14 +100,12 @@ expectMessageTimeout timeout signal =
                        else return ()
        in do loop timeout
              liftEvent $
-               do cancelProcessWithId pid2
-                  triggerSignal src Nothing
-     spawnProcessUsingIdWith CancelChildAfterParent pid2 $
-       do a <- processAwait signal
-          liftEvent $
-            do cancelProcessWithId pid1
-               triggerSignal src (Just a)
-     processAwait (publishSignal src)
+               triggerSignal src Nothing
+     let signal' = fmap Just signal <> publishSignal src
+     processAwait $
+       flip mapSignalM signal' $ \a ->
+       do cancelProcessWithId pid
+          return a
           
 -- | The signal triggered when the remote message of the specified type has come.
 messageReceived :: forall a. Serializable a => Signal DIO a
