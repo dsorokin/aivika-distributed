@@ -104,16 +104,16 @@ enqueueMessage q m =
                               pointPhase = -1 }
                  inputMessageRollbackPre q t'
                  liftIOUnsafe $
-                   writeIORef (inputMessageIndex q) i'
-                 if f
-                   then invokeEvent p' $ annihilateMessage q i
-                   else liftIOUnsafe $ insertMessage q m i
+                   do writeIORef (inputMessageIndex q) i'
+                      if f
+                        then annihilateMessage q i
+                        else insertMessage q m i
                  n <- liftIOUnsafe $ vectorCount (inputMessages q)
                  forM_ [i' .. n-1] $
                    invokeEvent p' . activateMessage q
                  inputMessageRollbackPost q t'
          else if f
-              then invokeEvent p $ annihilateMessage q i
+              then liftIOUnsafe $ annihilateMessage q i
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
 
@@ -160,11 +160,11 @@ findAntiMessage q m =
             in loop right       
 
 -- | Annihilate a message at the specified index.
-annihilateMessage :: InputMessageQueue -> Int -> Event DIO ()
+annihilateMessage :: InputMessageQueue -> Int -> IO ()
 annihilateMessage q i =
-  do item <- liftIOUnsafe $ readVector (inputMessages q) i
-     liftIOUnsafe $ vectorDeleteAt (inputMessages q) i
-     liftIOUnsafe $ writeIORef (itemActivated item) False
+  do item <- readVector (inputMessages q) i
+     vectorDeleteAt (inputMessages q) i
+     writeIORef (itemActivated item) False
 
 -- | Activate a message at the specified index.
 activateMessage :: InputMessageQueue -> Int -> Event DIO ()
