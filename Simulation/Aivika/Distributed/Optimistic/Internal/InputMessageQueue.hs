@@ -16,6 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         messageEnqueued) where
 
 import Data.Maybe
+import Data.List
 import Data.IORef
 
 import Control.Monad
@@ -47,16 +48,20 @@ data InputMessageQueue =
                       -- ^ The message source.
                       inputMessages :: Vector InputMessageQueueItem,
                       -- ^ The input messages.
-                      inputMessageIndex :: IORef Int
+                      inputMessageIndex :: IORef Int,
                       -- ^ An index of the next actual item.
+                      inputMessageActions :: IORef [Event DIO ()]
+                      -- ^ The list of actions to perform.
                     }
 
 -- | Specified the input message queue item.
 data InputMessageQueueItem =
   InputMessageQueueItem { itemMessage :: Message,
                           -- ^ The item message.
-                          itemActivated :: IORef Bool
+                          itemActivated :: IORef Bool,
                           -- ^ Whether the item is activated.
+                          itemAnnihilated :: IORef Bool
+                          -- ^ Whether the item was annihilated.
                         }
 
 -- | Create a new input message queue.
@@ -69,14 +74,16 @@ newInputMessageQueue :: UndoableLog
                         -> DIO InputMessageQueue
 newInputMessageQueue log rollbackPre rollbackPost =
   do ms <- liftIOUnsafe newVector
-     r  <- liftIOUnsafe $ newIORef 0
+     r1 <- liftIOUnsafe $ newIORef 0
+     r2 <- liftIOUnsafe $ newIORef []
      s  <- newSignalSource0
      return InputMessageQueue { inputMessageLog = log,
                                 inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
                                 inputMessageSource = s,
                                 inputMessages = ms,
-                                inputMessageIndex = r }
+                                inputMessageIndex = r1,
+                                inputMessageActions = r2 }
 
 -- | Raised when the message is enqueued.
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
@@ -97,15 +104,17 @@ enqueueMessage q m =
          then do i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m
                      p' = pastPoint t p
+                 liftIOUnsafe $
+                   requireEmptyMessageActions q
                  inputMessageRollbackPre q t'
                  liftIOUnsafe $
-                   do writeIORef (inputMessageIndex q) i'
-                      if f
-                        then annihilateMessage q i
-                        else insertMessage q m i
-                 n <- liftIOUnsafe $ vectorCount (inputMessages q)
-                 forM_ [i' .. n-1] $
-                   invokeEvent p' . activateMessage q
+                   writeIORef (inputMessageIndex q) i'
+                 if f
+                   then liftIOUnsafe $ annihilateMessage q i
+                   else do liftIOUnsafe $ insertMessage q m i
+                           invokeEvent p' $ activateMessage q i
+                 invokeEvent p' $
+                   performMessageActions q
                  inputMessageRollbackPost q t'
          else if f
               then liftIOUnsafe $ annihilateMessage q i
@@ -122,6 +131,20 @@ pastPoint t p = p'
         p' = p { pointTime = t,
                  pointIteration = n,
                  pointPhase = -1 }
+
+-- | Require that the there are no message actions.
+requireEmptyMessageActions :: InputMessageQueue -> IO ()
+requireEmptyMessageActions q =
+  do xs <- readIORef (inputMessageActions q)
+     unless (null xs) $
+       error "There are incomplete message actions: requireEmptyMessageActions"
+
+-- | Perform the message actions
+performMessageActions :: InputMessageQueue -> Event DIO ()
+performMessageActions q =
+  do xs <- liftIOUnsafe $ readIORef (inputMessageActions q)
+     liftIOUnsafe $ writeIORef (inputMessageActions q) []
+     sequence_ xs
 
 -- | Return the leftmost index for the current message.
 leftMessageIndex :: InputMessageQueue -> Message -> Int -> IO Int
@@ -170,28 +193,35 @@ annihilateMessage :: InputMessageQueue -> Int -> IO ()
 annihilateMessage q i =
   do item <- readVector (inputMessages q) i
      vectorDeleteAt (inputMessages q) i
-     writeIORef (itemActivated item) False
+     writeIORef (itemAnnihilated item) True
 
 -- | Activate a message at the specified index.
 activateMessage :: InputMessageQueue -> Int -> Event DIO ()
 activateMessage q i =
   do item <- liftIOUnsafe $ readVector (inputMessages q) i
-     let m = itemMessage item
-     f <- liftIOUnsafe $ readIORef (itemActivated item)
-     unless f $
-       do liftIOUnsafe $ writeIORef (itemActivated item) True
-          writeLog (inputMessageLog q) $
-            liftIOUnsafe $ writeIORef (itemActivated item) False
-          enqueueEvent (messageReceiveTime m) $
-            do f <- liftIOUnsafe $ readIORef (itemActivated item)
-               when f $
-                 triggerSignal (inputMessageSource q) m
+     let m    = itemMessage item
+         loop =
+           do f1 <- liftIOUnsafe $ readIORef (itemActivated item)
+              f2 <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+              when ((not f1) && (not f2)) $
+                do liftIOUnsafe $ writeIORef (itemActivated item) True
+                   writeLog (inputMessageLog q) $
+                     liftIOUnsafe $
+                     do writeIORef (itemActivated item) False
+                        modifyIORef (inputMessageActions q) (loop :)
+                   enqueueEvent (messageReceiveTime m) $
+                     do f1 <- liftIOUnsafe $ readIORef (itemActivated item)
+                        f2 <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+                        when (f1 && (not f2)) $
+                          triggerSignal (inputMessageSource q) m
+     loop
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 insertMessage q m i =
-  do r <- newIORef False
-     let item = InputMessageQueueItem m r
+  do r1 <- newIORef False
+     r2 <- newIORef False
+     let item = InputMessageQueueItem m r1 r2
      vectorInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
