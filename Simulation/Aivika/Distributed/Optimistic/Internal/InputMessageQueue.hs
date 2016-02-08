@@ -88,20 +88,15 @@ enqueueMessage q m =
   Event $ \p ->
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
      let t  = messageReceiveTime m
+         t0 = pointTime p
      (i, f) <- liftIOUnsafe $ findAntiMessage q m
      case f of
        Nothing -> return ()
        Just f  ->
-         if i < i0 || t < pointTime p
+         if i < i0 || t < t0
          then do i' <- liftIOUnsafe $ leftMessageIndex q m i
-                 let sc = pointSpecs p
-                     t0 = spcStartTime sc
-                     dt = spcDT sc
-                     t' = messageReceiveTime m
-                     n' = fromIntegral $ floor ((t' - t0) / dt)
-                     p' = p { pointTime = t',
-                              pointIteration = n',
-                              pointPhase = -1 }
+                 let t' = messageReceiveTime m
+                     p' = pastPoint t p
                  inputMessageRollbackPre q t'
                  liftIOUnsafe $
                    do writeIORef (inputMessageIndex q) i'
@@ -116,6 +111,17 @@ enqueueMessage q m =
               then liftIOUnsafe $ annihilateMessage q i
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
+
+-- | Return the point in the past.
+pastPoint :: Double -> Point DIO -> Point DIO
+pastPoint t p = p'
+  where sc = pointSpecs p
+        t0 = spcStartTime sc
+        dt = spcDT sc
+        n  = fromIntegral $ floor ((t - t0) / dt)
+        p' = p { pointTime = t,
+                 pointIteration = n,
+                 pointPhase = -1 }
 
 -- | Return the leftmost index for the current message.
 leftMessageIndex :: InputMessageQueue -> Message -> Int -> IO Int
