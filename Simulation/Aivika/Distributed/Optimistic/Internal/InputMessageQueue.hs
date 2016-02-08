@@ -58,8 +58,6 @@ data InputMessageQueue =
 data InputMessageQueueItem =
   InputMessageQueueItem { itemMessage :: Message,
                           -- ^ The item message.
-                          itemActivated :: IORef Bool,
-                          -- ^ Whether the item is activated.
                           itemAnnihilated :: IORef Bool
                           -- ^ Whether the item was annihilated.
                         }
@@ -201,27 +199,22 @@ activateMessage q i =
   do item <- liftIOUnsafe $ readVector (inputMessages q) i
      let m    = itemMessage item
          loop =
-           do f1 <- liftIOUnsafe $ readIORef (itemActivated item)
-              f2 <- liftIOUnsafe $ readIORef (itemAnnihilated item)
-              when ((not f1) && (not f2)) $
-                do liftIOUnsafe $ writeIORef (itemActivated item) True
-                   writeLog (inputMessageLog q) $
+           do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+              unless f $
+                do writeLog (inputMessageLog q) $
                      liftIOUnsafe $
-                     do writeIORef (itemActivated item) False
-                        modifyIORef (inputMessageActions q) (loop :)
+                     modifyIORef (inputMessageActions q) (loop :)
                    enqueueEvent (messageReceiveTime m) $
-                     do f1 <- liftIOUnsafe $ readIORef (itemActivated item)
-                        f2 <- liftIOUnsafe $ readIORef (itemAnnihilated item)
-                        when (f1 && (not f2)) $
+                     do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+                        unless f $
                           triggerSignal (inputMessageSource q) m
      loop
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 insertMessage q m i =
-  do r1 <- newIORef False
-     r2 <- newIORef False
-     let item = InputMessageQueueItem m r1 r2
+  do r <- newIORef False
+     let item = InputMessageQueueItem m r
      vectorInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
