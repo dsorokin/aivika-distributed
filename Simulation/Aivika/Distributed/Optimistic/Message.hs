@@ -69,6 +69,8 @@ enqueueMessage pid t a =
 
 -- | Blocks the simulation until the specified signal is triggered which
 -- must depend directly or indirectly on the 'messageReceived' signal.
+-- The modeling time does not change, even though the resulting action
+-- has the 'Process' type.
 expectMessage :: Signal DIO a -> Process DIO a
 expectMessage signal =
   do pid <- liftSimulation newProcessId
