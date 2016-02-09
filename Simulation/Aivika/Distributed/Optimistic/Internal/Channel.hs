@@ -17,61 +17,61 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Channel
         writeChannel,
         awaitChannel) where
 
+import Data.List
 import Data.IORef
 
-import Control.Concurrent.MVar
-
-import qualified Simulation.Aivika.DoubleLinkedList as DLL
+import Control.Concurrent.STM
+import Control.Monad
 
 -- | A channel.
 data Channel a =
-  Channel { channelLock :: MVar (),
-            channelCond :: MVar (),
-            channelList :: IORef (DLL.DoubleLinkedList a),
-            channelListEmpty :: IORef Bool
+  Channel { channelList :: TVar ([a] -> [a]),
+            channelListEmpty :: TVar Bool,
+            channelListEmptyIO :: IORef Bool
           }
 
 -- | Create a new channel.
 newChannel :: IO (Channel a)
 newChannel =
-  do lock <- newMVar ()
-     cond <- newEmptyMVar
-     list <- DLL.newList >>= newIORef
-     listEmpty <- newIORef True
-     return Channel { channelLock = lock,
-                      channelCond = cond,
-                      channelList = list,
-                      channelListEmpty = listEmpty }
+  do list <- newTVarIO id
+     listEmpty <- newTVarIO True
+     listEmptyIO <- newIORef True
+     return Channel { channelList = list,
+                      channelListEmpty = listEmpty,
+                      channelListEmptyIO = listEmptyIO }
 
 -- | Test quickly whether the channel is empty.
 channelEmpty :: Channel a -> IO Bool
 channelEmpty ch =
-  readIORef (channelListEmpty ch)
+  readIORef (channelListEmptyIO ch)
 
 -- | Read all data from the channel. 
 readChannel :: Channel a -> IO [a]
 readChannel ch =
-  withMVar (channelLock ch) $ \() ->
-  do f <- readIORef (channelListEmpty ch)
-     if f
+  do empty <- readIORef (channelListEmptyIO ch)
+     if empty
        then return []
-       else do list  <- readIORef (channelList ch)
-               list' <- DLL.newList
-               writeIORef (channelList ch) list'
-               writeIORef (channelListEmpty ch) True
-               tryTakeMVar (channelCond ch)
-               DLL.freezeList list
+       else do writeIORef (channelListEmptyIO ch) True
+               f <- atomically $
+                    do f <- readTVar (channelList ch)
+                       writeTVar (channelList ch) id
+                       writeTVar (channelListEmpty ch) True
+                       return f
+               return (f [])
 
 -- | Write the value in the channel.
 writeChannel :: Channel a -> a -> IO ()
 writeChannel ch a =
-  withMVar (channelLock ch) $ \() ->
-  do list <- readIORef (channelList ch)
-     DLL.listAddLast list a
-     writeIORef (channelListEmpty ch) False
-     tryPutMVar (channelCond ch) ()
-     return ()
+  do atomically $
+       do f <- readTVar (channelList ch)
+          let f' xs = a : f xs
+          writeTVar (channelList ch) f'
+          writeTVar (channelListEmpty ch) False
+     writeIORef (channelListEmptyIO ch) False
 
 -- | Wait for data in the channel.
 awaitChannel :: Channel a -> IO ()
-awaitChannel ch = takeMVar (channelCond ch)
+awaitChannel ch =
+  atomically $
+  do empty <- readTVar (channelListEmpty ch)
+     when empty retry
