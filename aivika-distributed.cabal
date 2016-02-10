@@ -46,7 +46,7 @@ library
                      binary >= 0.6.4.0,
                      time >= 1.5.0.1,
                      distributed-process >= 0.5.5.1,
-                     aivika >= 4.3.2,
+                     aivika >= 4.3.3,
                      aivika-transformers >= 4.3.2
 
     extensions:      MultiParamTypeClasses,
