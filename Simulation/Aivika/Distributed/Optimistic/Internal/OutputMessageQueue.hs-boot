@@ -30,3 +30,4 @@ sendMessage :: OutputMessageQueue -> Message -> DIO ()
 
 rollbackOutputMessages :: OutputMessageQueue -> Double -> DIO ()
 
+reduceOutputMessages :: OutputMessageQueue -> Double -> IO ()

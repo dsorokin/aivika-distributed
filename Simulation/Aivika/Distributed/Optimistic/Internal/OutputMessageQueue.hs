@@ -14,6 +14,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
         newOutputMessageQueue,
         sendMessage,
         rollbackOutputMessages,
+        reduceOutputMessages,
         generateMessageSequenceNo) where
 
 import Data.IORef
@@ -22,7 +23,8 @@ import Control.Monad
 import Control.Monad.Trans
 import qualified Control.Distributed.Process as DP
 
-import Simulation.Aivika.Vector
+import qualified Simulation.Aivika.DoubleLinkedList as DLL
+
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Event
@@ -34,7 +36,7 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the output message queue.
 data OutputMessageQueue =
-  OutputMessageQueue { outputMessages :: Vector Message,
+  OutputMessageQueue { outputMessages :: DLL.DoubleLinkedList Message,
                        -- ^ The output messages.
                        outputMessageSequenceNo :: IORef Int
                        -- ^ The next sequence number.
@@ -43,7 +45,7 @@ data OutputMessageQueue =
 -- | Create a new output message queue.
 newOutputMessageQueue :: DIO OutputMessageQueue
 newOutputMessageQueue =
-  do ms <- liftIOUnsafe newVector
+  do ms <- liftIOUnsafe DLL.newList
      rn <- liftIOUnsafe $ newIORef 0
      return OutputMessageQueue { outputMessages = ms,
                                  outputMessageSequenceNo = rn }
@@ -55,13 +57,13 @@ sendMessage q m =
        error "The Send time cannot be greater than the Receive message time: sendMessage"
      when (messageAntiToggle m) $
        error "Cannot directly send the anti-message: sendMessage"
-     n <- liftIOUnsafe $ vectorCount (outputMessages q)
-     when (n > 0) $
-       do m' <- liftIOUnsafe $ readVector (outputMessages q) (n - 1)
+     f <- liftIOUnsafe $ DLL.listNull (outputMessages q)
+     unless f $
+       do m' <- liftIOUnsafe $ DLL.listLast (outputMessages q)
           when (messageSendTime m' > messageSendTime m) $
             error "A new output message comes from the past: sendMessage."
      deliverMessage m
-     liftIOUnsafe $ appendVector (outputMessages q) m
+     liftIOUnsafe $ DLL.listAddLast (outputMessages q) m
 
 -- | Rollback the messages till the specified time including that one.
 rollbackOutputMessages :: OutputMessageQueue -> Double -> DIO ()
@@ -71,17 +73,29 @@ rollbackOutputMessages q t =
                  
 -- | Return the messages to roolback by the specified time.
 extractMessagesToRollback :: OutputMessageQueue -> Double -> IO [Message]
-extractMessagesToRollback q t =
-  let loop i acc
-        | i < 0     = return acc
-        | otherwise =
-          do m <- readVector (outputMessages q) i
-             if messageSendTime m < t
-               then return acc
-               else do vectorDeleteAt (outputMessages q) i
-                       loop (i - 1) (m : acc)
-  in do n <- vectorCount (outputMessages q)
-        loop (n - 1) []
+extractMessagesToRollback q t = loop []
+  where
+    loop acc =
+      do f <- DLL.listNull (outputMessages q)
+         if f
+           then return acc
+           else do m <- DLL.listLast (outputMessages q)
+                   if messageSendTime m < t
+                     then return acc
+                     else do DLL.listRemoveLast (outputMessages q)
+                             loop (m : acc)
+
+-- | Reduce the output messages till the specified time.
+reduceOutputMessages :: OutputMessageQueue -> Double -> IO ()
+reduceOutputMessages q t = loop
+  where
+    loop =
+      do f <- DLL.listNull (outputMessages q)
+         unless f $
+           do m <- DLL.listFirst (outputMessages q)
+              when (messageSendTime m < t) $
+                do DLL.listRemoveFirst (outputMessages q)
+                   loop
 
 -- | Generate a next message sequence number.
 generateMessageSequenceNo :: OutputMessageQueue -> IO Int
