@@ -13,7 +13,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
         enqueueMessage,
-        messageEnqueued) where
+        messageEnqueued,
+        reduceInputMessages) where
 
 import Data.Maybe
 import Data.List
@@ -241,3 +242,7 @@ lookupRightMessageIndex :: InputMessageQueue -> Message -> IO Int
 lookupRightMessageIndex q m =
   do n <- vectorCount (inputMessages q)
      lookupRightMessageIndex' q m 0 (n - 1)
+
+-- | Reduce the input messages till the specified time.
+reduceInputMessages :: InputMessageQueue -> Double -> IO ()
+reduceInputMessages q t = undefined

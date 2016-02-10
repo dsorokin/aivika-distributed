@@ -12,7 +12,9 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
-        enqueueMessage) where
+        enqueueMessage,
+        messageEnqueued,
+        reduceInputMessages) where
 
 import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Event
@@ -32,3 +34,5 @@ newInputMessageQueue :: UndoableLog
 enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
 
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
+
+reduceInputMessages :: InputMessageQueue -> Double -> IO ()
