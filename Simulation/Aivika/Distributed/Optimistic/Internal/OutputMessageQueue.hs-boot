@@ -13,7 +13,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
         newOutputMessageQueue,
         sendMessage,
-        rollbackOutputMessages) where
+        rollbackOutputMessages,
+        reduceOutputMessages) where
 
 import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Event
