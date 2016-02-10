@@ -13,7 +13,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
         newOutputMessageQueue,
         sendMessage,
-        rollbackMessages,
+        rollbackOutputMessages,
         generateMessageSequenceNo) where
 
 import Data.IORef
@@ -64,8 +64,8 @@ sendMessage q m =
      liftIOUnsafe $ appendVector (outputMessages q) m
 
 -- | Rollback the messages till the specified time including that one.
-rollbackMessages :: OutputMessageQueue -> Double -> DIO ()
-rollbackMessages q t =
+rollbackOutputMessages :: OutputMessageQueue -> Double -> DIO ()
+rollbackOutputMessages q t =
   do ms <- liftIOUnsafe $ extractMessagesToRollback q t
      forM_ ms (deliverAntiMessage . antiMessage)
                  
