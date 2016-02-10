@@ -204,7 +204,7 @@ processInputMessage = undefined
 -- | Process the message channel.
 processChannel :: Event DIO ()
 processChannel =
-  do ch <- liftComp dioChannel
+  do ch <- liftComp messageChannel
      f  <- liftIOUnsafe $ channelEmpty ch
      unless f $
        do xs <- liftIOUnsafe $ readChannel ch
@@ -244,7 +244,7 @@ processChannelMessage (DIOGlobalTimeMessage m) =
      liftIOUnsafe $
        writeIORef tg (globalTimeValue m)
      t   <- invokeEvent p $ R.readRef tl
-     pid <- dioTimeServerId
+     pid <- timeServerId
      liftDistributedUnsafe $
        DP.send pid (GlobalTimeMessageResp t)
 processChannelMessage (DIOLocalTimeMessageResp m) =

@@ -13,7 +13,8 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
-        runDIO) where
+        runDIO,
+        messageInboxId) where
 
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.DES

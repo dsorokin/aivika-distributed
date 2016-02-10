@@ -14,9 +14,9 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         DIOParams,
         DIOMessage(..),
         runDIO,
-        dioChannel,
-        dioReceiverId,
-        dioTimeServerId,
+        messageChannel,
+        messageInboxId,
+        timeServerId,
         liftDistributedUnsafe) where
 
 import Control.Applicative
@@ -40,8 +40,8 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 data DIOParams =
   DIOParams { dioParamChannel :: Channel DIOMessage,
               -- ^ The channel of messages.
-              dioParamReceiverId :: ProcessId,
-              -- ^ The receiver process
+              dioParamInboxId :: ProcessId,
+              -- ^ The inbox process identifier.
               dioParamTimeServerId :: ProcessId
               -- ^ The time server process
             }
@@ -89,16 +89,16 @@ runDIO :: DIO () -> Process ProcessId
 runDIO = undefined
 
 -- | Return the chanel of messages.
-dioChannel :: DIO (Channel DIOMessage)
-dioChannel = DIO $ return . dioParamChannel
+messageChannel :: DIO (Channel DIOMessage)
+messageChannel = DIO $ return . dioParamChannel
 
--- | Return the receiver process identifier.
-dioReceiverId :: DIO ProcessId
-dioReceiverId = DIO $ return . dioParamReceiverId
+-- | Return the process identifier of the inbox that receives messages.
+messageInboxId :: DIO ProcessId
+messageInboxId = DIO $ return . dioParamInboxId
 
 -- | Return the time server process identifier.
-dioTimeServerId :: DIO ProcessId
-dioTimeServerId = DIO $ return . dioParamTimeServerId
+timeServerId :: DIO ProcessId
+timeServerId = DIO $ return . dioParamTimeServerId
 
 -- | The message type.
 data DIOMessage = DIOQueueMessage Message
