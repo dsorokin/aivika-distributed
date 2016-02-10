@@ -245,4 +245,18 @@ lookupRightMessageIndex q m =
 
 -- | Reduce the input messages till the specified time.
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
-reduceInputMessages q t = undefined
+reduceInputMessages q t =
+  do count <- vectorCount (inputMessages q)
+     len   <- loop count 0
+     when (len > 0) $
+       do vectorDeleteRange (inputMessages q) 0 len
+          modifyIORef' (inputMessageIndex q) (\i -> i - len)
+            where
+              loop n i
+                | i >= n    = return i
+                | otherwise = do item <- readVector (inputMessages q) i
+                                 let m = itemMessage item
+                                 if messageReceiveTime m < t
+                                   then loop n (i + 1)
+                                   else return i
+
