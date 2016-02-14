@@ -1,5 +1,5 @@
 
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.DIO
@@ -16,11 +16,15 @@ module Simulation.Aivika.Distributed.Optimistic.DIO
         runDIO,
         messageInboxId) where
 
+import Control.Monad
+import Control.Monad.Trans
+
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.DES
 import Simulation.Aivika.Trans.Exception
 import Simulation.Aivika.Trans.Generator
 import Simulation.Aivika.Trans.Event
+import Simulation.Aivika.Trans.Process
 import Simulation.Aivika.Trans.Ref.Base
 import Simulation.Aivika.Trans.QueueStrategy
 
@@ -35,3 +39,7 @@ import Simulation.Aivika.Distributed.Optimistic.QueueStrategy
 instance MonadDES DIO
 
 instance MonadComp DIO
+
+instance {-# OVERLAPPING #-} MonadIO (Process DIO) where
+  liftIO = liftEvent . liftIO
+

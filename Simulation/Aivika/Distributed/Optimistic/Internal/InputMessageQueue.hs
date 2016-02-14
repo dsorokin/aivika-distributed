@@ -104,7 +104,7 @@ enqueueMessage q m =
          then do ---
                  liftDistributedUnsafe $
                    DP.say $
-                   "*** Rollback t = " ++ (show t0) ++ " --> " ++ (show t)
+                   "*** Rollback at t = " ++ (show t0) ++ " --> " ++ (show t)
                  ---
                  i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m

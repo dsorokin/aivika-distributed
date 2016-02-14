@@ -1,5 +1,5 @@
 
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Event
@@ -281,14 +281,25 @@ logMessage (QueueMessage m) =
   liftDistributedUnsafe $
   DP.say $
   "t = " ++ (show $ pointTime p) ++ ": QueueMessage { " ++
-  "sendTime=" ++ (show $ messageSendTime m) ++
-  ", receiveTime=" ++ (show $ messageReceiveTime m) ++
-  (if messageAntiToggle m then ", antiToggle=True" else "") ++
-  "}"
+  "sendTime = " ++ (show $ messageSendTime m) ++
+  ", receiveTime = " ++ (show $ messageReceiveTime m) ++
+  (if messageAntiToggle m then ", antiToggle = True" else "") ++
+  " }"
 logMessage m =
   Event $ \p ->
   liftDistributedUnsafe $
   DP.say $ "t = " ++ (show $ pointTime p) ++ ": " ++ show m
+
+-- | Log that the process is waiting for IO.
+logWaitingForIO :: Event DIO ()
+logWaitingForIO =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     liftDistributedUnsafe $
+       DP.say $
+       "Waiting for IO at t = " ++ (show $ pointTime p) ++
+       ", global t = " ++ (show t')
 
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
@@ -299,3 +310,29 @@ reduceEvents t =
        do reduceInputMessages (queueInputMessages q) t
           reduceOutputMessages (queueOutputMessages q) t
      reduceLog (queueLog q) t
+
+instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
+
+  liftIO m = loop
+    where
+      loop =
+        Event $ \p ->
+        do let q = runEventQueue $ pointRun p
+               t = pointTime p
+           t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+           if t' > t
+             then error "Inconsistent time: liftIO"
+             else if t' == pointTime p
+                  then liftIOUnsafe m
+                  else do ---
+                          invokeEvent p logWaitingForIO
+                          ---
+                          sender   <- messageInboxId
+                          receiver <- timeServerId
+                          liftDistributedUnsafe $
+                            DP.send receiver (LocalTimeMessage sender t)
+                          ch <- messageChannel
+                          liftIOUnsafe $ awaitChannel ch
+                          invokeEvent p $
+                            processChannelMessages
+                          invokeEvent p loop
