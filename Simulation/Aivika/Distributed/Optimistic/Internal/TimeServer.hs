@@ -77,9 +77,10 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
           writeIORef (tsProcesses server) M.empty
           writeIORef (tsGlobalTime server) Nothing
           writeIORef (tsGlobalTimeInvalid server) True
-          return (M.keys m)
+          return $ filter (/= pid) (M.keys m)
      forM_ pids $ \pid ->
        DP.send pid TerminateLocalProcessMessage
+     DP.terminate
 processTimeServerMessage server (GlobalTimeMessageResp pid t') =
   liftIO $
   do m <- readIORef (tsProcesses server)
