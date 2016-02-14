@@ -191,7 +191,11 @@ timeServerLoop ps =
        do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
           case m of
             Nothing -> return ()
-            Just m  -> processTimeServerMessage server m
+            Just m  ->
+              do ---
+                 DP.say $ "Time Server: " ++ show m
+                 ---
+                 processTimeServerMessage server m
           liftIO $
             threadDelay (1000 * tsTimeSyncDelay ps)
           validateTimeServer server
