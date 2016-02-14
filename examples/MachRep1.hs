@@ -1,4 +1,6 @@
 
+{-# LANGUAGE TemplateHaskell #-}
+
 -- It corresponds to model MachRep1 described in document 
 -- Introduction to Discrete-Event Simulation and the SimPy Language
 -- [http://heather.cs.ucdavis.edu/~matloff/156/PLN/DESimIntro.pdf]. 
@@ -15,8 +17,11 @@
 -- Output is long-run proportion of up time. Should get value of about
 -- 0.66.
 
+import System.Environment (getArgs)
+
 import Control.Monad.Trans
-import Control.Distributed.Process
+import qualified Control.Distributed.Process as DP
+import Control.Distributed.Process.Closure
 import Control.Distributed.Process.Node (initRemoteTable)
 import Control.Distributed.Process.Backend.SimpleLocalnet
 
@@ -32,7 +37,7 @@ specs = Specs { spcStartTime = 0.0,
                 spcMethod = RungeKutta4,
                 spcGeneratorType = SimpleGenerator }
         
-model :: Simulation DIO (Results DIO)
+model :: Simulation DIO Double
 model =
   do totalUpTime <- newRef 0.0
      
@@ -57,22 +62,37 @@ model =
               y <- liftDynamics time
               return $ x / (2 * y)
 
-     return $
-       results
-       [resultSource
-        "upTimeProp"
-        "The long-run proportion of up time (~ 0.66)"
-        upTimeProp]
+     runEventInStopTime upTimeProp
 
-simulate :: DIO ()
-simulate =
-  printSimulationResultsInStopTime
-  printResultSourceInEnglish
-  model specs
+simulate :: DP.ProcessId -> DP.Process ()
+simulate pid =
+  do a <- flip runDIO pid $
+          do a <- runSimulation model specs
+             terminateSimulation
+             return a
+     DP.say $
+       "The result is " ++ show a
 
-master = \backend nodes -> runDIO simulate defaultDIOParams
+remotable ['simulate]
+
+master = \backend nodes@(node : _) ->
+  do liftIO . putStrLn $ "Slaves: " ++ show nodes
+     serverId  <- spawnTimeServer node defaultTimeServerParams
+     processId <- DP.spawn node ($(mkClosure 'simulate) serverId)
+     return ()
   
+-- main :: IO ()
+-- main = do
+--   backend <- initializeBackend "localhost" "8080" initRemoteTable
+--   startMaster backend (master backend)
+
 main :: IO ()
 main = do
-  backend <- initializeBackend "localhost" "8080" initRemoteTable
-  startMaster backend (master backend)
+  args <- getArgs
+  case args of
+    ["master", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startMaster backend (master backend)
+    ["slave", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startSlave backend
