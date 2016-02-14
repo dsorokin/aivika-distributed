@@ -22,6 +22,7 @@ import Data.IORef
 
 import Control.Monad
 import Control.Monad.Trans
+import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Vector
 import Simulation.Aivika.Trans.Comp
@@ -100,7 +101,12 @@ enqueueMessage q m =
        Nothing -> return ()
        Just f  ->
          if i < i0 || t < t0
-         then do i' <- liftIOUnsafe $ leftMessageIndex q m i
+         then do ---
+                 liftDistributedUnsafe $
+                   DP.say $
+                   "*** Rollback t = " ++ (show t0) ++ " --> " ++ (show t)
+                 ---
+                 i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m
                      p' = pastPoint t p
                  liftIOUnsafe $
