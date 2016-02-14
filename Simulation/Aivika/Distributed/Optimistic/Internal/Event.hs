@@ -20,6 +20,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
 
 import Data.IORef
 
+import System.Timeout
+
 import Control.Monad
 import Control.Monad.Trans
 import qualified Control.Distributed.Process as DP
@@ -107,6 +109,9 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
   call q p =
     do let pq = queuePQ q
            r  = pointRun p
+       -- process external messages
+       invokeEvent p processChannelMessages
+       -- proceed with processing the events
        f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
        unless f $
          do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
@@ -173,6 +178,9 @@ processCurrentEvents = Dynamics r where
   call q p =
     do let pq = queuePQ q
            r  = pointRun p
+       -- process external messages
+       invokeEvent p processChannelMessages
+       -- proceed with processing the events
        f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
        unless f $
          do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
@@ -186,29 +194,38 @@ processCurrentEvents = Dynamics r where
                  c2 p
                  call q p
 
--- | Expect the input message.
+-- | Expect any input message.
 expectInputMessage :: Event DIO ()
 expectInputMessage =
   Event $ \p ->
-  do invokeEvent p processInputMessage
+  do ch <- messageChannel
+     liftIOUnsafe $ awaitChannel ch
      invokeDynamics p processCurrentEvents
 
 -- | Like 'expectInputMessage' but with a timeout in milliseconds.
-expectInputMessageTimeout :: Int -> Event DIO ()
-expectInputMessageTimeout = undefined
-
--- | Process an input message.
-processInputMessage :: Event DIO ()
-processInputMessage = undefined
+expectInputMessageTimeout :: Int -> Event DIO Bool
+expectInputMessageTimeout dt =
+  Event $ \p ->
+  do ch <- messageChannel
+     f  <- liftIOUnsafe $
+           timeout (1000 * dt) $
+           awaitChannel ch
+     case f of
+       Nothing -> return False
+       Just _  ->
+         do invokeDynamics p processCurrentEvents
+            return True
 
 -- | Process the channel messages.
 processChannelMessages :: Event DIO ()
 processChannelMessages =
-  do ch <- liftComp messageChannel
+  Event $ \p ->
+  do ch <- messageChannel
      f  <- liftIOUnsafe $ channelEmpty ch
      unless f $
        do xs <- liftIOUnsafe $ readChannel ch
-          forM_ xs processChannelMessage
+          forM_ xs $
+            invokeEvent p . processChannelMessage
 
 -- | Process the channel message.
 processChannelMessage :: LocalProcessMessage -> Event DIO ()
