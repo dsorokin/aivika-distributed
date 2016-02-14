@@ -63,6 +63,9 @@ model =
               y <- liftDynamics time
               return $ x / (2 * y)
 
+     runEventInStopTime $
+       liftIO $ putStrLn "Test IO"
+     
      runEventInStopTime upTimeProp
 
 simulate :: DP.ProcessId -> DP.Process ()
