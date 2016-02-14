@@ -14,7 +14,9 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
-        antiMessages) where
+        antiMessages,
+        LocalProcessMessage(..),
+        TimeServerMessage(..)) where
 
 import GHC.Generics
 
@@ -67,3 +69,32 @@ instance Eq Message where
     (messageSenderId x == messageSenderId y) &&
     (messageReceiverId x == messageReceiverId y) &&
     (messageAntiToggle x == messageAntiToggle y)
+
+-- | The message sent to the local process.
+data LocalProcessMessage = QueueMessage Message
+                            -- ^ the message has come from the remote process
+                          | GlobalTimeMessage Double
+                            -- ^ the time server sent a global time
+                          | LocalTimeMessageResp Double
+                            -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
+                          | TerminateLocalProcessMessage
+                            -- ^ the time server asked to terminate the process
+                          deriving (Show, Typeable, Generic)
+
+instance Binary LocalProcessMessage
+
+-- | The time server message.
+data TimeServerMessage = RegisterLocalProcessMessage DP.ProcessId
+                         -- ^ register the local process in the time server
+                       | UnregisterLocalProcessMessage DP.ProcessId
+                         -- ^ unregister the local process from the time server
+                       | GlobalTimeMessageResp DP.ProcessId Double
+                         -- ^ the local process replied to 'GlobalTimeMessage' sending its local time in response
+                       | LocalTimeMessage DP.ProcessId Double
+                         -- ^ the local process sent its local time
+                       | TerminateTimeServerMessage DP.ProcessId
+                         -- ^ the local process asked to terminate the time server
+                       deriving (Show, Typeable, Generic)
+
+instance Binary TimeServerMessage
+

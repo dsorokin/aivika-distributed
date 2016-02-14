@@ -12,7 +12,6 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams,
-        DIOMessage(..),
         runDIO,
         messageChannel,
         messageInboxId,
@@ -38,7 +37,7 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioParamChannel :: Channel DIOMessage,
+  DIOParams { dioParamChannel :: Channel LocalProcessMessage,
               -- ^ The channel of messages.
               dioParamInboxId :: ProcessId,
               -- ^ The inbox process identifier.
@@ -89,7 +88,7 @@ runDIO :: DIO () -> Process ProcessId
 runDIO = undefined
 
 -- | Return the chanel of messages.
-messageChannel :: DIO (Channel DIOMessage)
+messageChannel :: DIO (Channel LocalProcessMessage)
 messageChannel = DIO $ return . dioParamChannel
 
 -- | Return the process identifier of the inbox that receives messages.
@@ -99,13 +98,3 @@ messageInboxId = DIO $ return . dioParamInboxId
 -- | Return the time server process identifier.
 timeServerId :: DIO ProcessId
 timeServerId = DIO $ return . dioParamTimeServerId
-
--- | The message type.
-data DIOMessage = DIOQueueMessage Message
-                  -- ^ the message has come from the remote process
-                | DIOGlobalTimeMessage GlobalTimeMessage
-                  -- ^ the time server sent a global time
-                | DIOLocalTimeMessageResp LocalTimeMessageResp
-                  -- ^ the time server responded to our notification about the local time
-                | DIOTerminateMessage
-                  -- ^ the time server asked to terminate the process

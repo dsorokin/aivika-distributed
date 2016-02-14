@@ -211,8 +211,8 @@ processChannel =
           forM_ xs processChannelMessage
 
 -- | Process the channel message
-processChannelMessage :: DIOMessage -> Event DIO ()
-processChannelMessage (DIOQueueMessage m) =
+processChannelMessage :: LocalProcessMessage -> Event DIO ()
+processChannelMessage (QueueMessage m) =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
@@ -228,7 +228,7 @@ processChannelMessage (DIOQueueMessage m) =
        (show $ messageSendTime m)
      ---
      invokeEvent p $ enqueueMessage (queueInputMessages q) m
-processChannelMessage (DIOGlobalTimeMessage m) =
+processChannelMessage (GlobalTimeMessage globalTime) =
   Event $ \p ->
   do let q  = runEventQueue $ pointRun p
          tg = queueGlobalTime q
@@ -237,17 +237,18 @@ processChannelMessage (DIOGlobalTimeMessage m) =
      liftDistributedUnsafe $
        DP.say $
        "Received a message with global time " ++
-       (show $ globalTimeValue m) ++
+       (show globalTime) ++
        " at local time " ++
        (show $ pointTime p)
      ---
      liftIOUnsafe $
-       writeIORef tg (globalTimeValue m)
-     t   <- invokeEvent p $ R.readRef tl
-     pid <- timeServerId
+       writeIORef tg globalTime
+     t <- invokeEvent p $ R.readRef tl
+     inboxPid  <- messageInboxId
+     serverPid <- timeServerId
      liftDistributedUnsafe $
-       DP.send pid (GlobalTimeMessageResp t)
-processChannelMessage (DIOLocalTimeMessageResp m) =
+       DP.send serverPid (GlobalTimeMessageResp inboxPid t)
+processChannelMessage (LocalTimeMessageResp globalTime) =
   Event $ \p ->
   do let q  = runEventQueue $ pointRun p
          tg = queueGlobalTime q
@@ -255,13 +256,13 @@ processChannelMessage (DIOLocalTimeMessageResp m) =
      liftDistributedUnsafe $
        DP.say $
        "Received a response with global time " ++
-       (show $ localTimeRespValue m) ++
+       (show globalTime) ++
        " at local time " ++
        (show $ pointTime p)
      ---
      liftIOUnsafe $
-       writeIORef tg (localTimeRespValue m)
-processChannelMessage DIOTerminateMessage =
+       writeIORef tg globalTime
+processChannelMessage TerminateLocalProcessMessage =
   Event $ \p ->
   do ---
      liftDistributedUnsafe $
