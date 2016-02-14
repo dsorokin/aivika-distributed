@@ -85,10 +85,6 @@ instance MonadException DIO where
 liftDistributedUnsafe :: DP.Process a -> DIO a
 liftDistributedUnsafe = DIO . const
 
--- | Run the computation.
-runDIO :: DIO () -> DP.Process DP.ProcessId
-runDIO = undefined
-
 -- | Return the chanel of messages.
 messageChannel :: DIO (Channel LocalProcessMessage)
 messageChannel = DIO $ return . dioParamChannel
@@ -125,3 +121,26 @@ unregisterSimulation =
           DP.say "Unregistering the simulation process..."
           ---
           DP.send receiver (UnregisterLocalProcessMessage sender)
+
+-- | Run the computation using the specified time server process identifier.
+runDIO :: DIO a -> DP.ProcessId -> DP.Process a
+runDIO m serverId =
+  do ch <- liftIO newChannel
+     inboxId <-
+       DP.spawnLocal $
+       forever $
+       do m <- DP.expect :: DP.Process LocalProcessMessage
+          liftIO $
+            writeChannel ch m
+          when (m == TerminateLocalProcessMessage) $
+            do ---
+               DP.say "Terminating the inbox process..."
+               ---
+               DP.terminate
+     ---
+     DP.say "Registering the simulation process..."
+     ---
+     DP.send serverId (RegisterLocalProcessMessage inboxId)
+     unDIO m DIOParams { dioParamChannel = ch,
+                         dioParamInboxId = inboxId,
+                         dioParamTimeServerId = serverId }

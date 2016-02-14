@@ -79,7 +79,7 @@ data LocalProcessMessage = QueueMessage Message
                             -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
                           | TerminateLocalProcessMessage
                             -- ^ the time server asked to terminate the process
-                          deriving (Show, Typeable, Generic)
+                          deriving (Eq, Show, Typeable, Generic)
 
 instance Binary LocalProcessMessage
 
@@ -94,7 +94,7 @@ data TimeServerMessage = RegisterLocalProcessMessage DP.ProcessId
                          -- ^ the local process sent its local time
                        | TerminateTimeServerMessage DP.ProcessId
                          -- ^ the local process asked to terminate the time server
-                       deriving (Show, Typeable, Generic)
+                       deriving (Eq, Show, Typeable, Generic)
 
 instance Binary TimeServerMessage
 
