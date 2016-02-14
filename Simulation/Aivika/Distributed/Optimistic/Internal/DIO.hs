@@ -13,6 +13,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams,
         runDIO,
+        terminateSimulation,
+        unregisterSimulation,
         messageChannel,
         messageInboxId,
         timeServerId,
@@ -22,7 +24,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
 import Control.Exception (throw)
-import Control.Distributed.Process (Process, ProcessId, catch, finally)
+import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Trans.Exception
 
@@ -31,7 +33,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
 -- | The distributed computation based on 'IO'.
-newtype DIO a = DIO { unDIO :: DIOParams -> Process a
+newtype DIO a = DIO { unDIO :: DIOParams -> DP.Process a
                       -- ^ Unwrap the computation.
                     }
 
@@ -39,9 +41,9 @@ newtype DIO a = DIO { unDIO :: DIOParams -> Process a
 data DIOParams =
   DIOParams { dioParamChannel :: Channel LocalProcessMessage,
               -- ^ The channel of messages.
-              dioParamInboxId :: ProcessId,
+              dioParamInboxId :: DP.ProcessId,
               -- ^ The inbox process identifier.
-              dioParamTimeServerId :: ProcessId
+              dioParamTimeServerId :: DP.ProcessId
               -- ^ The time server process
             }
 
@@ -71,20 +73,20 @@ instance Functor DIO where
 instance MonadException DIO where
 
   catchComp (DIO m) h = DIO $ \ps ->
-    catch (m ps) (\e -> unDIO (h e) ps)
+    DP.catch (m ps) (\e -> unDIO (h e) ps)
 
   finallyComp (DIO m1) (DIO m2) = DIO $ \ps ->
-    finally (m1 ps) (m2 ps)
+    DP.finally (m1 ps) (m2 ps)
   
   throwComp e = DIO $ \ps ->
     throw e
 
 -- | Lift the distributed 'Process' computation.
-liftDistributedUnsafe :: Process a -> DIO a
+liftDistributedUnsafe :: DP.Process a -> DIO a
 liftDistributedUnsafe = DIO . const
 
 -- | Run the computation.
-runDIO :: DIO () -> Process ProcessId
+runDIO :: DIO () -> DP.Process DP.ProcessId
 runDIO = undefined
 
 -- | Return the chanel of messages.
@@ -92,9 +94,34 @@ messageChannel :: DIO (Channel LocalProcessMessage)
 messageChannel = DIO $ return . dioParamChannel
 
 -- | Return the process identifier of the inbox that receives messages.
-messageInboxId :: DIO ProcessId
+messageInboxId :: DIO DP.ProcessId
 messageInboxId = DIO $ return . dioParamInboxId
 
 -- | Return the time server process identifier.
-timeServerId :: DIO ProcessId
+timeServerId :: DIO DP.ProcessId
 timeServerId = DIO $ return . dioParamTimeServerId
+
+-- | Terminate the simulation including the processes in
+-- all nodes connected to the time server.
+terminateSimulation :: DIO ()
+terminateSimulation =
+  do sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       do ---
+          DP.say "Terminating the simulation..."
+          ---
+          DP.send receiver (TerminateTimeServerMessage sender)
+
+-- | Unregister the simulation process from the time server
+-- without affecting the processes in other nodes connected to
+-- the corresponding time server.
+unregisterSimulation :: DIO ()
+unregisterSimulation =
+  do sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       do ---
+          DP.say "Unregistering the simulation process..."
+          ---
+          DP.send receiver (UnregisterLocalProcessMessage sender)
