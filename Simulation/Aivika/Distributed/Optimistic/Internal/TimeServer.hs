@@ -76,7 +76,7 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
        do m <- readIORef (tsProcesses server)
           writeIORef (tsProcesses server) M.empty
           writeIORef (tsGlobalTime server) Nothing
-          writeIORef (tsGlobalTimeInvalid server) False
+          writeIORef (tsGlobalTimeInvalid server) True
           return (M.keys m)
      forM_ pids $ \pid ->
        DP.send pid TerminateLocalProcessMessage
@@ -114,6 +114,43 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
        Nothing -> return ()
        Just t0 ->
          DP.send pid (LocalTimeMessageResp t0)
+
+-- | Validate the time server.
+validateTimeServer :: TimeServer -> DP.Process ()
+validateTimeServer server =
+  do f <- liftIO $ readIORef (tsGlobalTimeInvalid server)
+     when f $
+       do t0 <- liftIO $ timeServerGlobalTime server
+          case t0 of
+            Nothing -> return ()
+            Just t0 ->
+              do liftIO $
+                   do writeIORef (tsGlobalTime server) (Just t0)
+                      writeIORef (tsGlobalTimeInvalid server) False
+                 m <- liftIO $ readIORef (tsProcesses server)
+                 forM_ (M.assocs m) $ \(pid, x) ->
+                   do t0' <- liftIO $ readIORef (lpSentGlobalTime x)
+                      when (t0' /= Just t0) $
+                        do liftIO $ writeIORef (lpSentGlobalTime x) (Just t0)
+                           DP.send pid (GlobalTimeMessage t0) 
+
+-- | Return the time server global time.
+timeServerGlobalTime :: TimeServer -> IO (Maybe Double)
+timeServerGlobalTime server =
+  do xs <- fmap M.elems $ readIORef (tsProcesses server)
+     case xs of
+       [] -> return Nothing
+       (x : xs') ->
+         do t <- readIORef (lpLocalTime x)
+            case t of
+              Nothing -> return Nothing
+              Just t  -> loop xs' t
+                where loop [] acc = return (Just acc)
+                      loop (x : xs') acc =
+                        do t <- readIORef (lpLocalTime x)
+                           case t of
+                             Nothing -> return Nothing
+                             Just t  -> loop xs' (min t acc)
 
 -- | Spawn a new time server with the specified parameters.
 spawnTimeServer :: DP.NodeId -> TimeServerParams -> DP.Process DP.ProcessId
