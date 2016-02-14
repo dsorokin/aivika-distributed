@@ -14,7 +14,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServerParams(..),
         defaultTimeServerParams,
-        spawnTimeServer) where
+        spawnTimeServer,
+        spawnLocalTimeServer) where
 
 import qualified Data.Map as M
 import Data.Maybe
@@ -201,3 +202,8 @@ remotable ['timeServerLoop]
 spawnTimeServer :: DP.NodeId -> TimeServerParams -> DP.Process DP.ProcessId
 spawnTimeServer node ps =
   DP.spawn node ($(mkClosure 'timeServerLoop) ps)
+
+-- | Spawn a new local time server with the specified parameters.
+spawnLocalTimeServer :: TimeServerParams -> DP.Process DP.ProcessId
+spawnLocalTimeServer ps =
+  DP.spawnLocal (timeServerLoop ps)
