@@ -201,75 +201,84 @@ expectInputMessageTimeout = undefined
 processInputMessage :: Event DIO ()
 processInputMessage = undefined
 
--- | Process the message channel.
-processChannel :: Event DIO ()
-processChannel =
+-- | Process the channel messages.
+processChannelMessages :: Event DIO ()
+processChannelMessages =
   do ch <- liftComp messageChannel
      f  <- liftIOUnsafe $ channelEmpty ch
      unless f $
        do xs <- liftIOUnsafe $ readChannel ch
           forM_ xs processChannelMessage
 
--- | Process the channel message
+-- | Process the channel message.
 processChannelMessage :: LocalProcessMessage -> Event DIO ()
-processChannelMessage (QueueMessage m) =
+processChannelMessage x@(QueueMessage m) =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
-     liftDistributedUnsafe $
-       DP.say $
-       (if messageAntiToggle m
-        then "Received the anti-message at local time "
-        else "Received the event message at local time ") ++
-       (show $ pointTime p) ++
-       " with receive time " ++
-       (show $ messageReceiveTime m) ++
-       " and sender time " ++
-       (show $ messageSendTime m)
+     invokeEvent p $
+       logMessage x
      ---
-     invokeEvent p $ enqueueMessage (queueInputMessages q) m
-processChannelMessage (GlobalTimeMessage globalTime) =
+     invokeEvent p $
+       enqueueMessage (queueInputMessages q) m
+processChannelMessage x@(GlobalTimeMessage globalTime) =
   Event $ \p ->
-  do let q  = runEventQueue $ pointRun p
-         tg = queueGlobalTime q
-         tl = queueTime q
+  do let q = runEventQueue $ pointRun p
      ---
-     liftDistributedUnsafe $
-       DP.say $
-       "Received a message with global time " ++
-       (show globalTime) ++
-       " at local time " ++
-       (show $ pointTime p)
+     invokeEvent p $
+       logMessage x
      ---
      liftIOUnsafe $
-       writeIORef tg globalTime
-     t <- invokeEvent p $ R.readRef tl
-     inboxPid  <- messageInboxId
-     serverPid <- timeServerId
+       writeIORef (queueGlobalTime q) globalTime
+     invokeEvent p $
+       reduceEvents globalTime
+     t <- invokeEvent p $ R.readRef (queueTime q)
+     sender   <- messageInboxId
+     receiver <- timeServerId
      liftDistributedUnsafe $
-       DP.send serverPid (GlobalTimeMessageResp inboxPid t)
-processChannelMessage (LocalTimeMessageResp globalTime) =
+       DP.send receiver (GlobalTimeMessageResp sender t)
+processChannelMessage x@(LocalTimeMessageResp globalTime) =
   Event $ \p ->
-  do let q  = runEventQueue $ pointRun p
-         tg = queueGlobalTime q
+  do let q = runEventQueue $ pointRun p
      ---
-     liftDistributedUnsafe $
-       DP.say $
-       "Received a response with global time " ++
-       (show globalTime) ++
-       " at local time " ++
-       (show $ pointTime p)
+     invokeEvent p $
+       logMessage x
      ---
      liftIOUnsafe $
-       writeIORef tg globalTime
-processChannelMessage TerminateLocalProcessMessage =
+       writeIORef (queueGlobalTime q) globalTime
+     invokeEvent p $
+       reduceEvents globalTime
+processChannelMessage x@TerminateLocalProcessMessage =
   Event $ \p ->
   do ---
-     liftDistributedUnsafe $
-       DP.say $
-       "Received a terminating message at local time " ++
-       (show $ pointTime p)
+     invokeEvent p $
+       logMessage x
      ---
      liftDistributedUnsafe $
        DP.terminate
- 
+
+-- | Log the message at the specified time.
+logMessage :: LocalProcessMessage -> Event DIO ()
+logMessage (QueueMessage m) =
+  Event $ \p ->
+  liftDistributedUnsafe $
+  DP.say $
+  "t = " ++ (show $ pointTime p) ++ ": QueueMessage { " ++
+  "sendTime=" ++ (show $ messageSendTime m) ++
+  ", receiveTime=" ++ (show $ messageReceiveTime m) ++
+  (if messageAntiToggle m then ", antiToggle=True" else "") ++
+  "}"
+logMessage m =
+  Event $ \p ->
+  liftDistributedUnsafe $
+  DP.say $ "t = " ++ (show $ pointTime p) ++ ": " ++ show m
+
+-- | Reduce events till the specified time.
+reduceEvents :: Double -> Event DIO ()
+reduceEvents t =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     liftIOUnsafe $
+       do reduceInputMessages (queueInputMessages q) t
+          reduceOutputMessages (queueOutputMessages q) t
+     reduceLog (queueLog q) t
