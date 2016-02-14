@@ -1,4 +1,6 @@
 
+{-# LANGUAGE DeriveGeneric, TemplateHaskell #-}
+
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 -- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
@@ -17,15 +19,28 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 import qualified Data.Map as M
 import Data.Maybe
 import Data.IORef
+import Data.Typeable
+import Data.Binary
+
+import GHC.Generics
 
 import Control.Monad
 import Control.Monad.Trans
+import Control.Concurrent
 import qualified Control.Distributed.Process as DP
+import Control.Distributed.Process.Closure (remotable, mkClosure)
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 
 -- | The time server parameters.
-data TimeServerParams = TimeServerParams
+data TimeServerParams =
+  TimeServerParams { tsExpectTimeout :: Int,
+                     -- ^ the timeout in milliseconds within which a new message is expected
+                     tsTimeSyncDelay :: Int
+                     -- ^ the further delay in milliseconds before the time synchronization
+                   } deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary TimeServerParams
 
 -- | The time server.
 data TimeServer =
@@ -47,7 +62,21 @@ data LocalProcessInfo =
 
 -- | The default time server parameters.
 defaultTimeServerParams :: TimeServerParams
-defaultTimeServerParams = TimeServerParams
+defaultTimeServerParams =
+  TimeServerParams { tsExpectTimeout = 100,
+                     tsTimeSyncDelay = 100
+                   }
+
+-- | Create a new time server.
+newTimeServer :: IO TimeServer
+newTimeServer =
+  do m  <- newIORef M.empty
+     t0 <- newIORef Nothing
+     f  <- newIORef False
+     return TimeServer { tsProcesses = m,
+                         tsGlobalTime = t0,
+                         tsGlobalTimeInvalid = f
+                       }
 
 -- | Process the time server message.
 processTimeServerMessage :: TimeServer -> TimeServerMessage -> DP.Process ()
@@ -153,6 +182,22 @@ timeServerGlobalTime server =
                              Nothing -> return Nothing
                              Just t  -> loop xs' (min t acc)
 
+-- | The time server loop.
+timeServerLoop :: TimeServerParams -> DP.Process ()
+timeServerLoop ps =
+  do server <- liftIO newTimeServer
+     forever $
+       do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
+          case m of
+            Nothing -> return ()
+            Just m  -> processTimeServerMessage server m
+          liftIO $
+            threadDelay (1000 * tsTimeSyncDelay ps)
+          validateTimeServer server
+
+remotable ['timeServerLoop]
+
 -- | Spawn a new time server with the specified parameters.
 spawnTimeServer :: DP.NodeId -> TimeServerParams -> DP.Process DP.ProcessId
-spawnTimeServer = undefined
+spawnTimeServer node ps =
+  DP.spawn node ($(mkClosure 'timeServerLoop) ps)

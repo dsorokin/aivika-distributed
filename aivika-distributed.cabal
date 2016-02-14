@@ -55,7 +55,8 @@ library
                      FlexibleContexts,
                      TypeFamilies,
                      RankNTypes,
-                     DeriveGeneric
+                     DeriveGeneric,
+                     TemplateHaskell
 
     ghc-options:     -O2
 
