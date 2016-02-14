@@ -45,6 +45,7 @@ library
                      bytestring >= 0.10.4.0,
                      binary >= 0.6.4.0,
                      time >= 1.5.0.1,
+                     containers >= 0.4.0.0,
                      distributed-process >= 0.5.5.1,
                      aivika >= 4.3.3,
                      aivika-transformers >= 4.3.2
