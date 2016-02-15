@@ -50,8 +50,15 @@ writeLog :: UndoableLog -> DIO () -> Event DIO ()
 {-# INLINE writeLog #-}
 writeLog log h =
   Event $ \p ->
-  let x = UndoableItem { itemTime = pointTime p, itemUndo = h }
-  in liftIOUnsafe $ DLL.listAddLast (logItems log) x
+  do let x = UndoableItem { itemTime = pointTime p, itemUndo = h }
+     liftIOUnsafe $
+       do f <- DLL.listNull (logItems log)
+          if f
+            then DLL.listAddLast (logItems log) x
+            else do x <- DLL.listLast (logItems log)
+                    when (pointTime p < itemTime x) $
+                      error "The logging data are not sorted by time: writeLog"
+                    DLL.listAddLast (logItems log) x
 
 -- | Rollback the log till the specified time including that one.
 rollbackLog :: UndoableLog -> Double -> DIO ()
