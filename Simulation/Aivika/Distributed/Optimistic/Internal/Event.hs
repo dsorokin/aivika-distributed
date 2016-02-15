@@ -246,6 +246,18 @@ isLogOverflow =
                return True
        else return False
 
+-- | Throttle the message channel.
+throttleMessageChannel :: Event DIO ()
+throttleMessageChannel =
+  Event $ \p ->
+  do ch       <- messageChannel
+     sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       DP.send receiver (LocalTimeMessage sender $ pointTime p)
+     liftIOUnsafe $ awaitChannel ch
+     invokeEvent p $ processChannelMessages
+
 -- | Process the channel messages.
 processChannelMessages :: Event DIO ()
 processChannelMessages =
@@ -258,8 +270,7 @@ processChannelMessages =
             invokeEvent p . processChannelMessage
      f2 <- invokeEvent p isLogOverflow
      when f2 $
-       do liftIOUnsafe $ awaitChannel ch
-          invokeEvent p $ processChannelMessages
+       invokeEvent p throttleMessageChannel
 
 -- | Process the channel message.
 processChannelMessage :: LocalProcessMessage -> Event DIO ()
