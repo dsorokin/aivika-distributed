@@ -86,7 +86,7 @@ expectMessage signal =
        do cancelProcessWithId pid
           return a
 
--- | Like 'expectMessage' but with a timeout in milliseconds.
+-- | Like 'expectMessage' but with a timeout in microseconds.
 expectMessageTimeout :: Int -> Signal DIO a -> Process DIO (Maybe a)
 expectMessageTimeout timeout signal =
   do t0  <- liftComp $ liftIOUnsafe getCurrentTime
@@ -97,7 +97,7 @@ expectMessageTimeout timeout signal =
              do liftEvent $ expectInputMessageTimeout dt
                 when (dt > 0) $
                   do t1 <- liftComp $ liftIOUnsafe getCurrentTime
-                     let dt' = timeout - truncate (1000 * diffUTCTime t1 t0)
+                     let dt' = timeout - truncate (1000000 * diffUTCTime t1 t0)
                      if dt' > 0
                        then loop dt'
                        else return ()

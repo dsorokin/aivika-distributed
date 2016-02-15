@@ -219,13 +219,13 @@ expectInputMessage =
      liftIOUnsafe $ awaitChannel ch
      invokeDynamics p processCurrentEvents
 
--- | Like 'expectInputMessage' but with a timeout in milliseconds.
+-- | Like 'expectInputMessage' but with a timeout in microseconds.
 expectInputMessageTimeout :: Int -> Event DIO Bool
 expectInputMessageTimeout dt =
   Event $ \p ->
   do ch <- messageChannel
      f  <- liftIOUnsafe $
-           timeout (1000 * dt) $
+           timeout dt $
            awaitChannel ch
      case f of
        Nothing -> return False
