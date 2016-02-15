@@ -18,6 +18,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         messageChannel,
         messageInboxId,
         timeServerId,
+        logSizeThreshold,
         liftDistributedUnsafe) where
 
 import Control.Applicative
@@ -96,6 +97,10 @@ messageInboxId = DIO $ return . dioParamInboxId
 -- | Return the time server process identifier.
 timeServerId :: DIO DP.ProcessId
 timeServerId = DIO $ return . dioParamTimeServerId
+
+-- | Return the log size threshold.
+logSizeThreshold :: DIO Int
+logSizeThreshold = return 10000
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
