@@ -58,7 +58,10 @@ writeLog log h =
             then DLL.listAddLast (logItems log) x
             else do x <- DLL.listLast (logItems log)
                     when (pointTime p < itemTime x) $
-                      error "The logging data are not sorted by time: writeLog"
+                      error $
+                      "The logging data are not sorted by time (" ++
+                      (show $ pointTime p) ++ " < " ++
+                      (show $ itemTime x) ++ "): writeLog"
                     DLL.listAddLast (logItems log) x
 
 -- | Rollback the log till the specified time including that one.
