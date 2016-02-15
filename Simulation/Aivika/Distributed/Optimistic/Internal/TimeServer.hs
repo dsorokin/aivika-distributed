@@ -89,10 +89,12 @@ processTimeServerMessage server (RegisterLocalProcessMessage pid) =
      modifyIORef (tsProcesses server) $
        M.insert pid LocalProcessInfo { lpLocalTime = t1, lpSentGlobalTime = t2 }
 processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
-  liftIO $
+  join $ liftIO $
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
-       Nothing -> return ()
+       Nothing ->
+         return $ DP.say $
+         "*Warning*: unknown process identifier " ++ show pid
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server) 
             t  <- readIORef (lpLocalTime x)
@@ -100,6 +102,7 @@ processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
               writeIORef (tsGlobalTimeInvalid server) True
             writeIORef (tsProcesses server) $
               M.delete pid m
+            return $ return ()
 processTimeServerMessage server (TerminateTimeServerMessage pid) =
   do pids <-
        liftIO $
@@ -112,10 +115,12 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
        DP.send pid TerminateLocalProcessMessage
      DP.terminate
 processTimeServerMessage server (GlobalTimeMessageResp pid t') =
-  liftIO $
+  join $ liftIO $
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
-       Nothing -> return ()
+       Nothing ->
+         return $ DP.say $
+         "*Warning*: unknown process identifier " ++ show pid
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server)
             t  <- readIORef (lpLocalTime x)
@@ -123,28 +128,28 @@ processTimeServerMessage server (GlobalTimeMessageResp pid t') =
               do writeIORef (lpLocalTime x) (Just t')
                  when ((t0 .>=. t) || (t0 .>=. Just t')) $
                    writeIORef (tsGlobalTimeInvalid server) True
+            return $ return ()
 processTimeServerMessage server (LocalTimeMessage pid t') =
-  do t0 <- liftIO $
-           do m <- readIORef (tsProcesses server)
-              case M.lookup pid m of
-                Nothing -> return Nothing
-                Just x  ->
-                  do t0 <- readIORef (tsGlobalTime server)
-                     t  <- readIORef (lpLocalTime x)
-                     if t == Just t'
-                       then return Nothing
-                       else do writeIORef (lpLocalTime x) (Just t')
-                               when ((t0 .>=. t) || (t0 .>=. Just t')) $
-                                 writeIORef (tsGlobalTimeInvalid server) True
-                               t0' <- readIORef (lpSentGlobalTime x)
-                               if (t0 == t0') || (isNothing t0)
-                                 then return Nothing
-                                 else do writeIORef (lpSentGlobalTime x) t0
-                                         return t0
-     case t0 of
-       Nothing -> return ()
-       Just t0 ->
-         DP.send pid (LocalTimeMessageResp t0)
+  join $ liftIO $
+  do m <- readIORef (tsProcesses server)
+     case M.lookup pid m of
+       Nothing ->
+         return $ DP.say $
+         "*Warning*: unknown process identifier " ++ show pid
+       Just x  ->
+         do t0 <- readIORef (tsGlobalTime server)
+            t  <- readIORef (lpLocalTime x)
+            if t == Just t'
+              then return $ return ()
+              else do writeIORef (lpLocalTime x) (Just t')
+                      when ((t0 .>=. t) || (t0 .>=. Just t')) $
+                        writeIORef (tsGlobalTimeInvalid server) True
+                      t0' <- readIORef (lpSentGlobalTime x)
+                      if (t0 == t0') || (isNothing t0)
+                        then return $ return ()
+                        else do writeIORef (lpSentGlobalTime x) t0
+                                return $
+                                  DP.send pid (LocalTimeMessageResp $ fromJust t0)
 
 -- | Whether the both values are defined and the first is greater than or equaled to the second.
 (.>=.) :: Maybe Double -> Maybe Double -> Bool
