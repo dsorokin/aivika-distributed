@@ -83,10 +83,7 @@ remotable ['simulate]
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      serverId  <- spawnLocalTimeServer defaultTimeServerParams
-     processId <- DP.spawnLocal (simulate serverId)
-     liftIO $
-       threadDelay 10000000
-     return ()
+     simulate serverId
 
 -- master = \backend nodes@(node : _) ->
 --   do liftIO . putStrLn $ "Slaves: " ++ show nodes
