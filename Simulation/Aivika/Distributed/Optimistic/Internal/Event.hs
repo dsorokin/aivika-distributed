@@ -95,42 +95,58 @@ instance EventQueueing DIO where
     in invokeEvent p $
        fmap PQ.queueCount $ R.readRef pq
 
+-- | Return the current event point.
+currentEventPoint :: Dynamics DIO (Point DIO)
+currentEventPoint =
+  Dynamics $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- invokeEvent p $ R.readRef (queueTime q)
+     let sc = pointSpecs p
+         t0 = spcStartTime sc
+         dt = spcDT sc
+         n' = fromIntegral $ floor ((t' - t0) / dt)
+     return p { pointTime = t',
+                pointIteration = n',
+                pointPhase = -1 }
+
 -- | Process the pending events.
 processPendingEventsCore :: Bool -> Dynamics DIO ()
 processPendingEventsCore includingCurrentEvents = Dynamics r where
   r p =
     do let q = runEventQueue $ pointRun p
            f = queueBusy q
-       f' <- invokeEvent p $ R.readRef f
+       p0 <- invokeDynamics p currentEventPoint
+       f' <- invokeEvent p0 $ R.readRef f
        unless f' $
-         do invokeEvent p $ R.writeRef f True
-            call q p
-            invokeEvent p $ R.writeRef f False
-  call q p =
+         do invokeEvent p0 $ R.writeRef f True
+            call q p p0
+            invokeEvent p0 $ R.writeRef f False
+  call q p p0 =
     do let pq = queuePQ q
            r  = pointRun p
        -- process external messages
-       invokeEvent p processChannelMessages
+       invokeEvent p0 processChannelMessages
        -- proceed with processing the events
-       f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
+       f <- invokeEvent p0 $ fmap PQ.queueNull $ R.readRef pq
        unless f $
-         do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
+         do (t2, c2) <- invokeEvent p0 $ fmap PQ.queueFront $ R.readRef pq
             let t = queueTime q
-            t' <- invokeEvent p $ R.readRef t
+            t' <- invokeEvent p0 $ R.readRef t
             when (t2 < t') $ 
               error "The time value is too small: processPendingEventsCore"
             when ((t2 < pointTime p) ||
                   (includingCurrentEvents && (t2 == pointTime p))) $
-              do invokeEvent p $ R.writeRef t t2
-                 invokeEvent p $ R.modifyRef pq PQ.dequeue
+              do invokeEvent p0 $ R.writeRef t t2
+                 invokeEvent p0 $ R.modifyRef pq PQ.dequeue
                  let sc = pointSpecs p
                      t0 = spcStartTime sc
                      dt = spcDT sc
                      n2 = fromIntegral $ floor ((t2 - t0) / dt)
-                 c2 $ p { pointTime = t2,
-                          pointIteration = n2,
-                          pointPhase = -1 }
-                 call q p
+                     p2 = p { pointTime = t2,
+                              pointIteration = n2,
+                              pointPhase = -1 }
+                 c2 p2
+                 call q p p2
 
 -- | Process the pending events synchronously, i.e. without past.
 processPendingEvents :: Bool -> Dynamics DIO ()
@@ -174,25 +190,26 @@ processCurrentEvents :: Dynamics DIO ()
 processCurrentEvents = Dynamics r where
   r p =
     let q = runEventQueue $ pointRun p
-    in call q p
-  call q p =
+        p0 = p
+    in call q p p0
+  call q p p0 =
     do let pq = queuePQ q
            r  = pointRun p
        -- process external messages
-       invokeEvent p processChannelMessages
+       invokeEvent p0 processChannelMessages
        -- proceed with processing the events
-       f <- invokeEvent p $ fmap PQ.queueNull $ R.readRef pq
+       f <- invokeEvent p0 $ fmap PQ.queueNull $ R.readRef pq
        unless f $
-         do (t2, c2) <- invokeEvent p $ fmap PQ.queueFront $ R.readRef pq
+         do (t2, c2) <- invokeEvent p0 $ fmap PQ.queueFront $ R.readRef pq
             let t = queueTime q
-            t' <- invokeEvent p $ R.readRef t
+            t' <- invokeEvent p0 $ R.readRef t
             when (t2 < t') $ 
               error "The time value is too small: processCurrentEvents"
             when (t2 == pointTime p) $
-              do invokeEvent p $ R.writeRef t t2
-                 invokeEvent p $ R.modifyRef pq PQ.dequeue
+              do invokeEvent p0 $ R.writeRef t t2
+                 invokeEvent p0 $ R.modifyRef pq PQ.dequeue
                  c2 p
-                 call q p
+                 call q p p0
 
 -- | Expect any input message.
 expectInputMessage :: Event DIO ()
@@ -241,6 +258,7 @@ processChannelMessage x@(QueueMessage m) =
 processChannelMessage x@(GlobalTimeMessage globalTime) =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
+         t = pointTime p
      ---
      invokeEvent p $
        logMessage x
@@ -249,7 +267,6 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
        writeIORef (queueGlobalTime q) globalTime
      invokeEvent p $
        reduceEvents globalTime
-     t <- invokeEvent p $ R.readRef (queueTime q)
      sender   <- messageInboxId
      receiver <- timeServerId
      liftDistributedUnsafe $
