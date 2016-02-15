@@ -36,9 +36,9 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 -- | The time server parameters.
 data TimeServerParams =
   TimeServerParams { tsExpectTimeout :: Int,
-                     -- ^ the timeout in milliseconds within which a new message is expected
+                     -- ^ the timeout in microseconds within which a new message is expected
                      tsTimeSyncDelay :: Int
-                     -- ^ the further delay in milliseconds before the time synchronization
+                     -- ^ the further delay in microseconds before the time synchronization
                    } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerParams
@@ -64,8 +64,8 @@ data LocalProcessInfo =
 -- | The default time server parameters.
 defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
-  TimeServerParams { tsExpectTimeout = 100,
-                     tsTimeSyncDelay = 100
+  TimeServerParams { tsExpectTimeout = 1000,
+                     tsTimeSyncDelay = 1000
                    }
 
 -- | Create a new time server.
@@ -210,7 +210,7 @@ timeServerLoop ps =
                  ---
                  processTimeServerMessage server m
           liftIO $
-            threadDelay (1000 * tsTimeSyncDelay ps)
+            threadDelay (tsTimeSyncDelay ps)
           validateTimeServer server
 
 remotable ['timeServerLoop]
