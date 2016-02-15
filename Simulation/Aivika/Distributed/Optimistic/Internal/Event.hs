@@ -242,7 +242,9 @@ isLogOverflow =
      threshold <- fmap dioLogSizeThreshold dioParams
      if n >= threshold
        then do liftDistributedUnsafe $
-                 DP.say "*Warning*: detected the log overflow."
+                 DP.say $
+                 "*Warning*: detected the log overflow at t = " ++
+                 (show $ pointTime p)
                return True
        else return False
 
