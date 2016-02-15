@@ -72,12 +72,11 @@ rollbackLog log t =
                rollbackLog log t
 
 -- | Reduce the log removing all items older than the specified time.
-reduceLog :: UndoableLog -> Double -> DIO ()
+reduceLog :: UndoableLog -> Double -> IO ()
 reduceLog log t =
-  do f <- liftIOUnsafe $ DLL.listNull (logItems log)
+  do f <- DLL.listNull (logItems log)
      unless f $
-       do x <- liftIOUnsafe $ DLL.listFirst (logItems log)
+       do x <- DLL.listFirst (logItems log)
           when (itemTime x < t) $
-            do liftIOUnsafe $ DLL.listRemoveFirst (logItems log)
+            do DLL.listRemoveFirst (logItems log)
                reduceLog log t
-

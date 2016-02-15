@@ -329,7 +329,7 @@ reduceEvents t =
      liftIOUnsafe $
        do reduceInputMessages (queueInputMessages q) t
           reduceOutputMessages (queueOutputMessages q) t
-     reduceLog (queueLog q) t
+          reduceLog (queueLog q) t
 
 instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
 
