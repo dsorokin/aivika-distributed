@@ -166,7 +166,7 @@ validateTimeServer :: TimeServer -> DP.Process ()
 validateTimeServer server =
   do f <- liftIO $ readIORef (tsGlobalTimeInvalid server)
      when f $
-       do t0 <- liftIO $ timeServerGlobalTime server
+       do t0 <- timeServerGlobalTime server
           case t0 of
             Nothing -> return ()
             Just t0 ->
@@ -181,25 +181,27 @@ validateTimeServer server =
                    do t0' <- liftIO $ readIORef (lpSentGlobalTime x)
                       when (t0' /= Just t0) $
                         do liftIO $ writeIORef (lpSentGlobalTime x) (Just t0)
-                           DP.send pid (GlobalTimeMessage t0) 
+                           DP.send pid (GlobalTimeMessage $ Just t0) 
 
 -- | Return the time server global time.
-timeServerGlobalTime :: TimeServer -> IO (Maybe Double)
+timeServerGlobalTime :: TimeServer -> DP.Process (Maybe Double)
 timeServerGlobalTime server =
-  do xs <- fmap M.elems $ readIORef (tsProcesses server)
-     case xs of
+  do t0 <- liftIO $ readIORef (tsGlobalTime server)
+     zs <- liftIO $ fmap M.assocs $ readIORef (tsProcesses server)
+     case zs of
        [] -> return Nothing
-       (x : xs') ->
-         do t <- readIORef (lpLocalTime x)
-            case t of
-              Nothing -> return Nothing
-              Just t  -> loop xs' t
-                where loop [] acc = return (Just acc)
-                      loop (x : xs') acc =
-                        do t <- readIORef (lpLocalTime x)
-                           case t of
-                             Nothing -> return Nothing
-                             Just t  -> loop xs' (min t acc)
+       ((pid, x) : zs') ->
+         do t <- liftIO $ readIORef (lpLocalTime x)
+            loop zs t
+              where loop [] acc = return acc
+                    loop ((pid, x) : zs') acc =
+                      do t <- liftIO $ readIORef (lpLocalTime x)
+                         case t of
+                           Nothing ->
+                             do DP.send pid (GlobalTimeMessage Nothing)
+                                loop zs' Nothing
+                           Just _  ->
+                             loop zs' (liftM2 min t acc)
 
 -- | The time server loop.
 timeServerLoop :: TimeServerParams -> DP.Process ()

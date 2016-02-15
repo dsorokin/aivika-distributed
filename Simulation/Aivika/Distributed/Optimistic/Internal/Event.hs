@@ -263,10 +263,13 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      invokeEvent p $
        logMessage x
      ---
-     liftIOUnsafe $
-       writeIORef (queueGlobalTime q) globalTime
-     invokeEvent p $
-       reduceEvents globalTime
+     case globalTime of
+       Nothing -> return ()
+       Just t0 ->
+         do liftIOUnsafe $
+              writeIORef (queueGlobalTime q) t0
+            invokeEvent p $
+              reduceEvents t0
      sender   <- messageInboxId
      receiver <- timeServerId
      liftDistributedUnsafe $

@@ -73,7 +73,7 @@ instance Eq Message where
 -- | The message sent to the local process.
 data LocalProcessMessage = QueueMessage Message
                             -- ^ the message has come from the remote process
-                          | GlobalTimeMessage Double
+                          | GlobalTimeMessage (Maybe Double)
                             -- ^ the time server sent a global time
                           | LocalTimeMessageResp Double
                             -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
