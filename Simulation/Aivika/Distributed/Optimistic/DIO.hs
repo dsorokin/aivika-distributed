@@ -13,7 +13,10 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
+        DIOParams(..),
         runDIO,
+        defaultDIOParams,
+        dioParams,
         messageInboxId,
         timeServerId,
         terminateSimulation,

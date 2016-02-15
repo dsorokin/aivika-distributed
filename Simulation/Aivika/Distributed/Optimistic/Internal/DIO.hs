@@ -1,4 +1,6 @@
 
+{-# LANGUAGE DeriveGeneric #-}
+
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 -- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
@@ -11,15 +13,21 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
-        DIOParams,
+        DIOParams(..),
         runDIO,
+        defaultDIOParams,
         terminateSimulation,
         unregisterSimulation,
+        dioParams,
         messageChannel,
         messageInboxId,
         timeServerId,
-        logSizeThreshold,
         liftDistributedUnsafe) where
+
+import Data.Typeable
+import Data.Binary
+
+import GHC.Generics
 
 import Control.Applicative
 import Control.Monad
@@ -34,7 +42,12 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
 -- | The parameters for the 'DIO' computation.
-data DIOParams = DIOParams
+data DIOParams =
+  DIOParams { dioLogSizeThreshold :: Int
+              -- ^ The log size threshold used for detecting an overflow
+            } deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary DIOParams
 
 -- | The distributed computation based on 'IO'.
 newtype DIO a = DIO { unDIO :: DIOContext -> DP.Process a
@@ -47,8 +60,10 @@ data DIOContext =
                -- ^ The channel of messages.
                dioInboxId :: DP.ProcessId,
                -- ^ The inbox process identifier.
-               dioTimeServerId :: DP.ProcessId
+               dioTimeServerId :: DP.ProcessId,
                -- ^ The time server process
+               dioParams0 :: DIOParams
+               -- ^ The parameters of the computation.
              }
 
 instance Monad DIO where
@@ -89,6 +104,15 @@ instance MonadException DIO where
 liftDistributedUnsafe :: DP.Process a -> DIO a
 liftDistributedUnsafe = DIO . const
 
+-- | The default parameters for the 'DIO' computation
+defaultDIOParams :: DIOParams
+defaultDIOParams =
+  DIOParams { dioLogSizeThreshold = 500000 }
+
+-- | Return the parameters of the current computation.
+dioParams :: DIO DIOParams
+dioParams = DIO $ return . dioParams0
+
 -- | Return the chanel of messages.
 messageChannel :: DIO (Channel LocalProcessMessage)
 messageChannel = DIO $ return . dioChannel
@@ -100,10 +124,6 @@ messageInboxId = DIO $ return . dioInboxId
 -- | Return the time server process identifier.
 timeServerId :: DIO DP.ProcessId
 timeServerId = DIO $ return . dioTimeServerId
-
--- | Return the log size threshold.
-logSizeThreshold :: DIO Int
-logSizeThreshold = return 100000
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
@@ -130,9 +150,9 @@ unregisterSimulation =
           ---
           DP.send receiver (UnregisterLocalProcessMessage sender)
 
--- | Run the computation using the specified time server process identifier.
-runDIO :: DIO a -> DP.ProcessId -> DP.Process a
-runDIO m serverId =
+-- | Run the computation using the specified parameters and time server process identifier.
+runDIO :: DIO a -> DIOParams -> DP.ProcessId -> DP.Process a
+runDIO m ps serverId =
   do ch <- liftIO newChannel
      inboxId <-
        DP.spawnLocal $
@@ -151,4 +171,5 @@ runDIO m serverId =
      DP.send serverId (RegisterLocalProcessMessage inboxId)
      unDIO m DIOContext { dioChannel = ch,
                           dioInboxId = inboxId,
-                          dioTimeServerId = serverId }
+                          dioTimeServerId = serverId,
+                          dioParams0 = ps }

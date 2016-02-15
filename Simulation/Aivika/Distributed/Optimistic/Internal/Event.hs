@@ -239,7 +239,7 @@ isLogOverflow =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      n <- liftIOUnsafe $ logSize (queueLog q)
-     threshold <- logSizeThreshold
+     threshold <- fmap dioLogSizeThreshold dioParams
      if n >= threshold
        then do liftDistributedUnsafe $
                  DP.say "*Warning*: detected the log overflow."
