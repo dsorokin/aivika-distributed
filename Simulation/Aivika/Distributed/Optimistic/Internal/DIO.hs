@@ -33,20 +33,23 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
+-- | The parameters for the 'DIO' computation.
+data DIOParams = DIOParams
+
 -- | The distributed computation based on 'IO'.
-newtype DIO a = DIO { unDIO :: DIOParams -> DP.Process a
+newtype DIO a = DIO { unDIO :: DIOContext -> DP.Process a
                       -- ^ Unwrap the computation.
                     }
 
--- | The parameters for the 'DIO' computation.
-data DIOParams =
-  DIOParams { dioParamChannel :: Channel LocalProcessMessage,
-              -- ^ The channel of messages.
-              dioParamInboxId :: DP.ProcessId,
-              -- ^ The inbox process identifier.
-              dioParamTimeServerId :: DP.ProcessId
-              -- ^ The time server process
-            }
+-- | The context of the 'DIO' computation.
+data DIOContext =
+  DIOContext { dioChannel :: Channel LocalProcessMessage,
+               -- ^ The channel of messages.
+               dioInboxId :: DP.ProcessId,
+               -- ^ The inbox process identifier.
+               dioTimeServerId :: DP.ProcessId
+               -- ^ The time server process
+             }
 
 instance Monad DIO where
 
@@ -88,19 +91,19 @@ liftDistributedUnsafe = DIO . const
 
 -- | Return the chanel of messages.
 messageChannel :: DIO (Channel LocalProcessMessage)
-messageChannel = DIO $ return . dioParamChannel
+messageChannel = DIO $ return . dioChannel
 
 -- | Return the process identifier of the inbox that receives messages.
 messageInboxId :: DIO DP.ProcessId
-messageInboxId = DIO $ return . dioParamInboxId
+messageInboxId = DIO $ return . dioInboxId
 
 -- | Return the time server process identifier.
 timeServerId :: DIO DP.ProcessId
-timeServerId = DIO $ return . dioParamTimeServerId
+timeServerId = DIO $ return . dioTimeServerId
 
 -- | Return the log size threshold.
 logSizeThreshold :: DIO Int
-logSizeThreshold = return 10000
+logSizeThreshold = return 100000
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
@@ -146,6 +149,6 @@ runDIO m serverId =
      DP.say "Registering the simulation process..."
      ---
      DP.send serverId (RegisterLocalProcessMessage inboxId)
-     unDIO m DIOParams { dioParamChannel = ch,
-                         dioParamInboxId = inboxId,
-                         dioParamTimeServerId = serverId }
+     unDIO m DIOContext { dioChannel = ch,
+                          dioInboxId = inboxId,
+                          dioTimeServerId = serverId }
