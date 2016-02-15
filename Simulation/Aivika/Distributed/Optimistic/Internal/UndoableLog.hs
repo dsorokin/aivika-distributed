@@ -14,7 +14,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
         newUndoableLog,
         writeLog,
         rollbackLog,
-        reduceLog) where
+        reduceLog,
+        logSize) where
 
 import Control.Monad
 import Control.Monad.Trans
@@ -80,3 +81,7 @@ reduceLog log t =
           when (itemTime x < t) $
             do DLL.listRemoveFirst (logItems log)
                reduceLog log t
+
+-- | Return the log size.
+logSize :: UndoableLog -> IO Int
+logSize log = DLL.listCount (logItems log)
