@@ -96,7 +96,7 @@ processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server) 
             t  <- readIORef (lpLocalTime x)
-            when (t0 == t) $
+            when (t0 .>=. t) $
               writeIORef (tsGlobalTimeInvalid server) True
             writeIORef (tsProcesses server) $
               M.delete pid m
@@ -121,7 +121,7 @@ processTimeServerMessage server (GlobalTimeMessageResp pid t') =
             t  <- readIORef (lpLocalTime x)
             when (t /= Just t') $
               do writeIORef (lpLocalTime x) (Just t')
-                 when (t0 == t) $
+                 when ((t0 .>=. t) || (t0 .>=. Just t')) $
                    writeIORef (tsGlobalTimeInvalid server) True
 processTimeServerMessage server (LocalTimeMessage pid t') =
   do t0 <- liftIO $
@@ -134,7 +134,7 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
                      if t == Just t'
                        then return Nothing
                        else do writeIORef (lpLocalTime x) (Just t')
-                               when (t0 == t) $
+                               when ((t0 .>=. t) || (t0 .>=. Just t')) $
                                  writeIORef (tsGlobalTimeInvalid server) True
                                t0' <- readIORef (lpSentGlobalTime x)
                                if (t0 == t0') || (isNothing t0)
@@ -146,6 +146,16 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
        Just t0 ->
          DP.send pid (LocalTimeMessageResp t0)
 
+-- | Whether the both values are defined and the first is greater than or equaled to the second.
+(.>=.) :: Maybe Double -> Maybe Double -> Bool
+(.>=.) (Just x) (Just y) = x >= y
+(.>=.) _ _ = False
+
+-- | Whether the both values are defined and the first is greater than the second.
+(.>.) :: Maybe Double -> Maybe Double -> Bool
+(.>.) (Just x) (Just y) = x > y
+(.>.) _ _ = False
+
 -- | Validate the time server.
 validateTimeServer :: TimeServer -> DP.Process ()
 validateTimeServer server =
@@ -155,7 +165,10 @@ validateTimeServer server =
           case t0 of
             Nothing -> return ()
             Just t0 ->
-              do liftIO $
+              do t' <- liftIO $ readIORef (tsGlobalTime server)
+                 when (t' .>. Just t0) $
+                   DP.say "*Warning*: the global time has decreased."
+                 liftIO $
                    do writeIORef (tsGlobalTime server) (Just t0)
                       writeIORef (tsGlobalTimeInvalid server) False
                  m <- liftIO $ readIORef (tsProcesses server)
