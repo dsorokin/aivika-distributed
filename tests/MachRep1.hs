@@ -19,6 +19,7 @@
 
 import System.Environment (getArgs)
 
+import Control.Monad
 import Control.Monad.Trans
 import Control.Concurrent
 import qualified Control.Distributed.Process as DP
@@ -71,12 +72,13 @@ model =
 simulate :: DP.ProcessId -> DP.Process ()
 simulate pid =
   do DP.say "Started simulating..."
-     a <- flip runDIO pid $
-          do a <- runSimulation model specs
-             terminateSimulation
-             return a
-     DP.say $
-       "The result is " ++ show a
+     let m =
+           do a <- runSimulation model specs
+              terminateSimulation
+              return $
+                DP.say $
+                "The result is " ++ show a
+     join $ runDIO m defaultDIOParams pid
 
 remotable ['simulate]
 
