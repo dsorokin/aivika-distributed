@@ -1,5 +1,5 @@
 
-{-# LANGUAGE DeriveGeneric, TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
@@ -14,8 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServerParams(..),
         defaultTimeServerParams,
-        spawnTimeServer,
-        spawnLocalTimeServer) where
+        timeServer) where
 
 import qualified Data.Map as M
 import Data.Maybe
@@ -203,9 +202,9 @@ timeServerGlobalTime server =
                            Just _  ->
                              loop zs' (liftM2 min t acc)
 
--- | The time server loop.
-timeServerLoop :: TimeServerParams -> DP.Process ()
-timeServerLoop ps =
+-- | Start the time server.
+timeServer :: TimeServerParams -> DP.Process ()
+timeServer ps =
   do server <- liftIO newTimeServer
      forever $
        do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
@@ -219,15 +218,3 @@ timeServerLoop ps =
           liftIO $
             threadDelay (tsTimeSyncDelay ps)
           validateTimeServer server
-
-remotable ['timeServerLoop]
-
--- | Spawn a new time server with the specified parameters.
-spawnTimeServer :: DP.NodeId -> TimeServerParams -> DP.Process DP.ProcessId
-spawnTimeServer node ps =
-  DP.spawn node ($(mkClosure 'timeServerLoop) ps)
-
--- | Spawn a new local time server with the specified parameters.
-spawnLocalTimeServer :: TimeServerParams -> DP.Process DP.ProcessId
-spawnLocalTimeServer ps =
-  DP.spawnLocal (timeServerLoop ps)
