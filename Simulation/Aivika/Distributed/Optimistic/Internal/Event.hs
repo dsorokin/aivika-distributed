@@ -188,8 +188,8 @@ processEvents CurrentEventsOrFromPast = processEventsIncludingCurrentCore
 processEvents EarlierEventsOrFromPast = processEventsIncludingEarlierCore
 
 -- | Process the current events only.
-processCurrentEvents :: Dynamics DIO ()
-processCurrentEvents = Dynamics r where
+processCurrentEvents :: Event DIO ()
+processCurrentEvents = Event r where
   r p =
     let q = runEventQueue $ pointRun p
         p0 = p
@@ -219,7 +219,7 @@ expectInputMessage =
   Event $ \p ->
   do ch <- messageChannel
      liftIOUnsafe $ awaitChannel ch
-     invokeDynamics p processCurrentEvents
+     invokeEvent p processCurrentEvents
 
 -- | Like 'expectInputMessage' but with a timeout in microseconds.
 expectInputMessageTimeout :: Int -> Event DIO Bool
@@ -232,7 +232,7 @@ expectInputMessageTimeout dt =
      case f of
        Nothing -> return False
        Just _  ->
-         do invokeDynamics p processCurrentEvents
+         do invokeEvent p processCurrentEvents
             return True
 
 -- | Whether there is a log overflow.
