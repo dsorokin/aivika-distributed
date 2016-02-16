@@ -26,6 +26,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Generator
                      Simulation.Aivika.Distributed.Optimistic.QueueStrategy
                      Simulation.Aivika.Distributed.Optimistic.Message
+                     Simulation.Aivika.Distributed.Optimistic.Priority
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 
@@ -36,6 +37,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Internal.IO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Message
                      Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Priority
                      Simulation.Aivika.Distributed.Optimistic.Internal.Ref
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
                      Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog

@@ -40,10 +40,13 @@ import Simulation.Aivika.Trans.Exception
 import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioUndoableLogSizeThreshold :: Int,
+  DIOParams { dioLoggingPriority :: Priority,
+              -- ^ The logging priority
+              dioUndoableLogSizeThreshold :: Int,
               -- ^ The undoable log size threshold used for detecting an overflow
               dioInputMessageQueueIndexThreshold :: Int,
               -- ^ The input message queue index threshold used for detecting an overflow
@@ -111,7 +114,8 @@ liftDistributedUnsafe = DIO . const
 -- | The default parameters for the 'DIO' computation
 defaultDIOParams :: DIOParams
 defaultDIOParams =
-  DIOParams { dioUndoableLogSizeThreshold = 500000,
+  DIOParams { dioLoggingPriority = WARNING,
+              dioUndoableLogSizeThreshold = 500000,
               dioInputMessageQueueIndexThreshold = 10000,
               dioOutputMessageQueueSizeThreshold = 10000
             }
