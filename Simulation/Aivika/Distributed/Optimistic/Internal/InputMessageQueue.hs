@@ -12,6 +12,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
+        inputMessageQueueIndex,
+        inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
         reduceInputMessages) where
@@ -84,6 +86,14 @@ newInputMessageQueue log rollbackPre rollbackPost =
                                 inputMessages = ms,
                                 inputMessageIndex = r1,
                                 inputMessageActions = r2 }
+
+-- | Return the input message queue index.
+inputMessageQueueIndex :: InputMessageQueue -> IO Int
+inputMessageQueueIndex = readIORef . inputMessageIndex
+
+-- | Return the input message queue size.
+inputMessageQueueSize :: InputMessageQueue -> IO Int
+inputMessageQueueSize = vectorCount . inputMessages
 
 -- | Raised when the message is enqueued.
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
