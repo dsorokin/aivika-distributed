@@ -31,6 +31,7 @@ import qualified Simulation.Aivika.PriorityQueue.Pure as PQ
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Trans.Internal.Types
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
@@ -248,10 +249,11 @@ isEventOverflow =
          th2 = dioInputMessageQueueIndexThreshold ps
          th3 = dioOutputMessageQueueSizeThreshold ps
      if (n1 >= th1) || (n2 >= th2) || (n3 >= th3)
-       then do liftDistributedUnsafe $
-                 DP.say $
-                 "*Warning*: detected the event overflow at t = " ++
-                 (show $ pointTime p)
+       then do when (dioLoggingPriority ps <= WARNING) $
+                 liftDistributedUnsafe $ DP.say $
+                 embracePriority WARNING ++
+                 " t = " ++ (show $ pointTime p) ++
+                 ": Detected the event overflow"
                return True
        else return False
 
@@ -335,28 +337,38 @@ processChannelMessage x@TerminateLocalProcessMessage =
 logMessage :: LocalProcessMessage -> Event DIO ()
 logMessage (QueueMessage m) =
   Event $ \p ->
-  liftDistributedUnsafe $
-  DP.say $
-  "t = " ++ (show $ pointTime p) ++ ": QueueMessage { " ++
-  "sendTime = " ++ (show $ messageSendTime m) ++
-  ", receiveTime = " ++ (show $ messageReceiveTime m) ++
-  (if messageAntiToggle m then ", antiToggle = True" else "") ++
-  " }"
+  do ps <- dioParams
+     when (dioLoggingPriority ps <= DEBUG) $
+       liftDistributedUnsafe $ DP.say $
+       embracePriority DEBUG ++
+       " t = " ++ (show $ pointTime p) ++
+       ": QueueMessage { " ++
+       "sendTime = " ++ (show $ messageSendTime m) ++
+       ", receiveTime = " ++ (show $ messageReceiveTime m) ++
+       (if messageAntiToggle m then ", antiToggle = True" else "") ++
+       " }"
 logMessage m =
   Event $ \p ->
-  liftDistributedUnsafe $
-  DP.say $ "t = " ++ (show $ pointTime p) ++ ": " ++ show m
+  do ps <- dioParams
+     when (dioLoggingPriority ps <= DEBUG) $
+       liftDistributedUnsafe $ DP.say $
+       embracePriority DEBUG ++
+       " t = " ++ (show $ pointTime p) ++
+       ": " ++ show m
 
 -- | Log that the process is waiting for IO.
 logWaitingForIO :: Event DIO ()
 logWaitingForIO =
   Event $ \p ->
-  do let q = runEventQueue $ pointRun p
-     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     liftDistributedUnsafe $
-       DP.say $
-       "Waiting for IO at t = " ++ (show $ pointTime p) ++
-       ", global t = " ++ (show t')
+  do ps <- dioParams
+     when (dioLoggingPriority ps <= DEBUG) $
+       do let q = runEventQueue $ pointRun p
+          t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+          liftDistributedUnsafe $ DP.say $
+            embracePriority DEBUG ++
+            " t = " ++ (show $ pointTime p) ++
+            ", global t = " ++ (show t') ++
+            ": Waiting for IO..."
 
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()

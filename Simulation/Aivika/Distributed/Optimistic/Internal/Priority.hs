@@ -12,7 +12,8 @@
 -- This module defines the logging 'Priority'.
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.Priority
-       (Priority(..)) where
+       (Priority(..),
+        embracePriority) where
 
 import Data.Typeable
 import Data.Binary
@@ -34,4 +35,6 @@ data Priority = DEBUG
 
 instance Binary Priority
 
-
+-- | Embrace the priority in brackets.
+embracePriority :: Priority -> String
+embracePriority p = "[" ++ show p ++ "]"
