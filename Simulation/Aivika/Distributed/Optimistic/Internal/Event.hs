@@ -235,17 +235,22 @@ expectInputMessageTimeout dt =
          do invokeEvent p processCurrentEvents
             return True
 
--- | Whether there is a log overflow.
-isLogOverflow :: Event DIO Bool
-isLogOverflow =
+-- | Whether there is an overflow.
+isEventOverflow :: Event DIO Bool
+isEventOverflow =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     n <- liftIOUnsafe $ logSize (queueLog q)
-     threshold <- fmap dioLogSizeThreshold dioParams
-     if n >= threshold
+     n1 <- liftIOUnsafe $ logSize (queueLog q)
+     n2 <- liftIOUnsafe $ inputMessageQueueIndex (queueInputMessages q)
+     n3 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
+     ps <- dioParams
+     let th1 = dioUndoableLogSizeThreshold ps
+         th2 = dioInputMessageQueueIndexThreshold ps
+         th3 = dioOutputMessageQueueSizeThreshold ps
+     if (n1 >= th1) || (n2 >= th2) || (n3 >= th3)
        then do liftDistributedUnsafe $
                  DP.say $
-                 "*Warning*: detected the log overflow at t = " ++
+                 "*Warning*: detected the event overflow at t = " ++
                  (show $ pointTime p)
                return True
        else return False
@@ -272,7 +277,7 @@ processChannelMessages =
        do xs <- liftIOUnsafe $ readChannel ch
           forM_ xs $
             invokeEvent p . processChannelMessage
-     f2 <- invokeEvent p isLogOverflow
+     f2 <- invokeEvent p isEventOverflow
      when f2 $
        invokeEvent p throttleMessageChannel
 

@@ -43,8 +43,12 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
-  DIOParams { dioLogSizeThreshold :: Int
-              -- ^ The log size threshold used for detecting an overflow
+  DIOParams { dioUndoableLogSizeThreshold :: Int,
+              -- ^ The undoable log size threshold used for detecting an overflow
+              dioInputMessageQueueIndexThreshold :: Int,
+              -- ^ The input message queue index threshold used for detecting an overflow
+              dioOutputMessageQueueSizeThreshold :: Int
+              -- ^ The output message queue size threshold used for detecting an overflow
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
@@ -107,7 +111,10 @@ liftDistributedUnsafe = DIO . const
 -- | The default parameters for the 'DIO' computation
 defaultDIOParams :: DIOParams
 defaultDIOParams =
-  DIOParams { dioLogSizeThreshold = 500000 }
+  DIOParams { dioUndoableLogSizeThreshold = 500000,
+              dioInputMessageQueueIndexThreshold = 10000,
+              dioOutputMessageQueueSizeThreshold = 10000
+            }
 
 -- | Return the parameters of the current computation.
 dioParams :: DIO DIOParams
