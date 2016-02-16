@@ -12,6 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
         newOutputMessageQueue,
+        outputMessageQueueSize,
         sendMessage,
         rollbackOutputMessages,
         reduceOutputMessages,
@@ -49,6 +50,10 @@ newOutputMessageQueue =
      rn <- liftIOUnsafe $ newIORef 0
      return OutputMessageQueue { outputMessages = ms,
                                  outputMessageSequenceNo = rn }
+
+-- | Return the output message queue size.
+outputMessageQueueSize :: OutputMessageQueue -> IO Int
+outputMessageQueueSize = DLL.listCount . outputMessages
 
 -- | Send the message.
 sendMessage :: OutputMessageQueue -> Message -> DIO ()

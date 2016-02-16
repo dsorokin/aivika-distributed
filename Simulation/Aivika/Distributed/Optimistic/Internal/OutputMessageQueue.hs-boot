@@ -12,6 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
        (OutputMessageQueue,
         newOutputMessageQueue,
+        outputMessageQueueSize,
         sendMessage,
         rollbackOutputMessages,
         reduceOutputMessages) where
@@ -26,6 +27,8 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 data OutputMessageQueue
 
 newOutputMessageQueue :: DIO OutputMessageQueue
+
+outputMessageQueueSize :: OutputMessageQueue -> IO Int
 
 sendMessage :: OutputMessageQueue -> Message -> DIO ()
 
