@@ -120,6 +120,7 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
           return $ filter (/= pid) (M.keys m)
      forM_ pids $ \pid ->
        DP.send pid TerminateLocalProcessMessage
+     logTimeServer server INFO "TimeServer: terminating..."
      DP.terminate
 processTimeServerMessage server (GlobalTimeMessageResp pid t') =
   join $ liftIO $
