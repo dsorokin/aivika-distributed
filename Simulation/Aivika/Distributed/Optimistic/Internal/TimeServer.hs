@@ -127,8 +127,10 @@ processTimeServerMessage server (GlobalTimeMessageResp pid t') =
      case M.lookup pid m of
        Nothing ->
          return $
-         logTimeServer server WARNING $
-         "Time Server: unknown process identifier " ++ show pid
+         do logTimeServer server WARNING $
+              "Time Server: unknown process identifier " ++ show pid
+            processTimeServerMessage server (RegisterLocalProcessMessage pid)
+            processTimeServerMessage server (GlobalTimeMessageResp pid t')
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server)
             t  <- readIORef (lpLocalTime x)
@@ -143,8 +145,10 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
      case M.lookup pid m of
        Nothing ->
          return $
-         logTimeServer server WARNING $
-         "Time Server: unknown process identifier " ++ show pid
+         do logTimeServer server WARNING $
+              "Time Server: unknown process identifier " ++ show pid
+            processTimeServerMessage server (RegisterLocalProcessMessage pid)
+            processTimeServerMessage server (LocalTimeMessage pid t')
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server)
             t  <- readIORef (lpLocalTime x)
