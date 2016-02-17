@@ -1,4 +1,6 @@
 
+{-# LANGUAGE TemplateHaskell #-}
+
 -- It corresponds to model MachRep1 described in document 
 -- Introduction to Discrete-Event Simulation and the SimPy Language
 -- [http://heather.cs.ucdavis.edu/~matloff/156/PLN/DESimIntro.pdf]. 
@@ -15,10 +17,13 @@
 -- Output is long-run proportion of up time. Should get value of about
 -- 0.66.
 
+import System.Environment (getArgs)
+
 import Control.Monad
 import Control.Monad.Trans
 import Control.Concurrent
 import qualified Control.Distributed.Process as DP
+import Control.Distributed.Process.Closure
 import Control.Distributed.Process.Node (initRemoteTable)
 import Control.Distributed.Process.Backend.SimpleLocalnet
 
@@ -75,14 +80,33 @@ simulate pid =
                 "The result is " ++ show a
      join $ runDIO m defaultDIOParams pid
 
+remotable ['simulate]
+
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      serverId  <- DP.spawnLocal $ timeServer defaultTimeServerParams
      simulate serverId
-     liftIO $
-       threadDelay 1000000
+
+-- master = \backend nodes@(node : _) ->
+--   do liftIO . putStrLn $ "Slaves: " ++ show nodes
+--      serverId  <- spawnTimeServer node defaultTimeServerParams
+--      processId <- DP.spawn node ($(mkClosure 'simulate) serverId)
+--      liftIO $
+--        threadDelay 5000000
+--      return ()
   
 main :: IO ()
 main = do
   backend <- initializeBackend "localhost" "8080" initRemoteTable
   startMaster backend (master backend)
+
+-- main :: IO ()
+-- main = do
+--   args <- getArgs
+--   case args of
+--     ["master", host, port] -> do
+--       backend <- initializeBackend host port initRemoteTable
+--       startMaster backend (master backend)
+--     ["slave", host, port] -> do
+--       backend <- initializeBackend host port initRemoteTable
+--       startSlave backend
