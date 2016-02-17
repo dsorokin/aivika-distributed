@@ -30,11 +30,14 @@ import Control.Concurrent
 import qualified Control.Distributed.Process as DP
 import Control.Distributed.Process.Closure (remotable, mkClosure)
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 
 -- | The time server parameters.
 data TimeServerParams =
-  TimeServerParams { tsExpectTimeout :: Int,
+  TimeServerParams { tsLoggingPriority :: Priority,
+                     -- ^ the logging priority
+                     tsExpectTimeout :: Int,
                      -- ^ the timeout in microseconds within which a new message is expected
                      tsTimeSyncDelay :: Int
                      -- ^ the further delay in microseconds before the time synchronization
@@ -44,7 +47,9 @@ instance Binary TimeServerParams
 
 -- | The time server.
 data TimeServer =
-  TimeServer { tsProcesses :: IORef (M.Map DP.ProcessId LocalProcessInfo),
+  TimeServer { tsParams :: TimeServerParams,
+               -- ^ the time server parameters
+               tsProcesses :: IORef (M.Map DP.ProcessId LocalProcessInfo),
                -- ^ the information about local processes
                tsGlobalTime :: IORef (Maybe Double),
                -- ^ the global time of the model
@@ -63,17 +68,19 @@ data LocalProcessInfo =
 -- | The default time server parameters.
 defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
-  TimeServerParams { tsExpectTimeout = 1000,
+  TimeServerParams { tsLoggingPriority = DEBUG,
+                     tsExpectTimeout = 1000,
                      tsTimeSyncDelay = 1000
                    }
 
 -- | Create a new time server.
-newTimeServer :: IO TimeServer
-newTimeServer =
+newTimeServer :: TimeServerParams -> IO TimeServer
+newTimeServer ps =
   do m  <- newIORef M.empty
      t0 <- newIORef Nothing
      f  <- newIORef False
-     return TimeServer { tsProcesses = m,
+     return TimeServer { tsParams = ps,
+                         tsProcesses = m,
                          tsGlobalTime = t0,
                          tsGlobalTimeInvalid = f
                        }
@@ -92,8 +99,9 @@ processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
        Nothing ->
-         return $ DP.say $
-         "*Warning*: unknown process identifier " ++ show pid
+         return $
+         logTimeServer server WARNING $
+         "Time Server: unknown process identifier " ++ show pid
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server) 
             t  <- readIORef (lpLocalTime x)
@@ -118,8 +126,9 @@ processTimeServerMessage server (GlobalTimeMessageResp pid t') =
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
        Nothing ->
-         return $ DP.say $
-         "*Warning*: unknown process identifier " ++ show pid
+         return $
+         logTimeServer server WARNING $
+         "Time Server: unknown process identifier " ++ show pid
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server)
             t  <- readIORef (lpLocalTime x)
@@ -133,8 +142,9 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
        Nothing ->
-         return $ DP.say $
-         "*Warning*: unknown process identifier " ++ show pid
+         return $
+         logTimeServer server WARNING $
+         "Time Server: unknown process identifier " ++ show pid
        Just x  ->
          do t0 <- readIORef (tsGlobalTime server)
             t  <- readIORef (lpLocalTime x)
@@ -171,7 +181,8 @@ validateTimeServer server =
             Just t0 ->
               do t' <- liftIO $ readIORef (tsGlobalTime server)
                  when (t' .>. Just t0) $
-                   DP.say "*Warning*: the global time has decreased."
+                   logTimeServer server NOTICE
+                   "Time Server: the global time has decreased"
                  liftIO $
                    do writeIORef (tsGlobalTime server) (Just t0)
                       writeIORef (tsGlobalTimeInvalid server) False
@@ -205,16 +216,26 @@ timeServerGlobalTime server =
 -- | Start the time server.
 timeServer :: TimeServerParams -> DP.Process ()
 timeServer ps =
-  do server <- liftIO newTimeServer
+  do server <- liftIO $ newTimeServer ps
      forever $
        do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
           case m of
             Nothing -> return ()
             Just m  ->
               do ---
-                 DP.say $ "Time Server: " ++ show m
+                 logTimeServer server DEBUG $
+                   "Time Server: " ++ show m
                  ---
                  processTimeServerMessage server m
           liftIO $
             threadDelay (tsTimeSyncDelay ps)
           validateTimeServer server
+
+-- | Log the message with the specified priority.
+logTimeServer :: TimeServer -> Priority -> String -> DP.Process ()
+{-# INLINE logTimeServer #-}
+logTimeServer server p message =
+  when (tsLoggingPriority (tsParams server) <= p) $
+  DP.say $
+  embracePriority p ++ " " ++ message
+
