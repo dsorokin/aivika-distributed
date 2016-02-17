@@ -34,6 +34,7 @@ import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Trans.Signal
 import Simulation.Aivika.Trans.Internal.Types
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -112,9 +113,8 @@ enqueueMessage q m =
        Just f  ->
          if i < i0 || t < t0
          then do ---
-                 liftDistributedUnsafe $
-                   DP.say $
-                   "*** Rollback at t = " ++ (show t0) ++ " --> " ++ (show t)
+                 logDIO NOTICE $
+                   "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t)
                  ---
                  i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m
