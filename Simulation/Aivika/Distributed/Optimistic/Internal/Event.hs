@@ -251,7 +251,7 @@ isEventOverflow =
      if (n1 >= th1) || (n2 >= th2) || (n3 >= th3)
        then do logDIO NOTICE $
                  "t = " ++ (show $ pointTime p) ++
-                 ": Detected the event overflow"
+                 ": detected the event overflow"
                return True
        else return False
 
@@ -357,7 +357,7 @@ logWaitingForIO =
      logDIO DEBUG $
        "t = " ++ (show $ pointTime p) ++
        ", global t = " ++ (show t') ++
-       ": Waiting for IO..."
+       ": waiting for IO..."
 
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
