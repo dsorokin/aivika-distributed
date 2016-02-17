@@ -1,5 +1,5 @@
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric, TemplateHaskell #-}
 
 -- It corresponds to model MachRep1 described in document 
 -- Introduction to Discrete-Event Simulation and the SimPy Language
@@ -17,7 +17,27 @@
 -- Output is long-run proportion of up time. Should get value of about
 -- 0.66.
 
+{-
+ghc -threaded MachRep1Distributed.hs
+
+Fire up some slave nodes (for the example, we run them on a single machine):
+
+./MachRep1Distributed slave localhost 8080 &
+./MachRep1Distributed slave localhost 8081 &
+./MachRep1Distributed slave localhost 8082 &
+./MachRep1Distributed slave localhost 8083 &
+
+And start the master node:
+
+./MachRep1Distributed master localhost 8084
+-}
+
 import System.Environment (getArgs)
+
+import Data.Typeable
+import Data.Binary
+
+import GHC.Generics
 
 import Control.Monad
 import Control.Monad.Trans
@@ -38,18 +58,28 @@ specs = Specs { spcStartTime = 0.0,
                 spcDT = 1.0,
                 spcMethod = RungeKutta4,
                 spcGeneratorType = SimpleGenerator }
-        
-model :: Simulation DIO Double
-model =
-  do totalUpTime <- newRef 0.0
-     
-     let machine =
+
+newtype TotalUpTimeChange = TotalUpTimeChange { runTotalUpTimeChange :: Double }
+                          deriving (Eq, Ord, Show, Typeable, Generic)
+
+data SubSimulationCompleted = SubSimulationCompleted
+                              deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary TotalUpTimeChange
+instance Binary SubSimulationCompleted
+
+-- | A sub-model.
+slaveModel :: DP.ProcessId -> Simulation DIO ()
+slaveModel masterId =
+  do let machine =
            do upTime <-
                 liftParameter $
                 randomExponential meanUpTime
               holdProcess upTime
-              liftEvent $ 
-                modifyRef totalUpTime (+ upTime)
+              ---
+              liftEvent $
+                sendMessage masterId (TotalUpTimeChange upTime)
+              ---
               repairTime <-
                 liftParameter $
                 randomExponential meanRepairTime
@@ -57,56 +87,80 @@ model =
               machine
 
      runProcessInStartTime machine
-     runProcessInStartTime machine
 
+     ---
+     runEventInStopTime $
+       sendMessage masterId SubSimulationCompleted
+     ---
+
+-- | The main model.       
+masterModel :: Int -> Simulation DIO Double
+masterModel n =
+  do totalUpTime <- newRef 0.0
+
+     ---
+     let totalUpTimeChanged :: Signal DIO TotalUpTimeChange
+         totalUpTimeChanged = messageReceived
+
+     runEventInStartTime $
+       handleSignal totalUpTimeChanged $ \x ->
+       modifyRef totalUpTime (+ runTotalUpTimeChange x)
+
+     let subSimulationCompleted :: Signal DIO SubSimulationCompleted
+         subSimulationCompleted = messageReceived
+
+     runProcessInStopTime $
+       forM_ [1..n] $ \_ ->
+       do expectMessage subSimulationCompleted
+          return ()
+     ---
+     
      let upTimeProp =
            do x <- readRef totalUpTime
               y <- liftDynamics time
-              return $ x / (2 * y)
+              return $ x / (fromIntegral n * y)
 
      runEventInStopTime $
        liftIO $ putStrLn "Test IO"
      
      runEventInStopTime upTimeProp
 
-simulate :: DP.ProcessId -> DP.Process ()
-simulate pid =
-  do DP.say "Started simulating..."
-     let m =
-           do a <- runSimulation model specs
+runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process ()
+runSlaveModel (timeServerId, masterId) =
+  runDIO m ps timeServerId
+    where
+      ps = defaultDIOParams
+      m  = runSimulation (slaveModel masterId) specs
+
+remotable ['runSlaveModel]
+
+runMasterModel :: DP.ProcessId -> Int -> DP.Process ()
+runMasterModel timeServerId n =
+  join $ runDIO m ps timeServerId
+    where
+      ps = defaultDIOParams
+      m  = do a <- runSimulation (masterModel n) specs
               terminateSimulation
               return $
                 DP.say $
                 "The result is " ++ show a
-     join $ runDIO m defaultDIOParams pid
 
-remotable ['simulate]
-
-master = \backend nodes ->
+master = \backend nodes@(_ : _) ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     serverId  <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     simulate serverId
+     timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
+     masterId <- DP.getSelfPid
+     forM_ nodes $ \node ->
+       do DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
+          return ()
+     runMasterModel timeServerId (length nodes)
 
--- master = \backend nodes@(node : _) ->
---   do liftIO . putStrLn $ "Slaves: " ++ show nodes
---      serverId  <- spawnTimeServer node defaultTimeServerParams
---      processId <- DP.spawn node ($(mkClosure 'simulate) serverId)
---      liftIO $
---        threadDelay 5000000
---      return ()
-  
 main :: IO ()
 main = do
-  backend <- initializeBackend "localhost" "8080" initRemoteTable
-  startMaster backend (master backend)
-
--- main :: IO ()
--- main = do
---   args <- getArgs
---   case args of
---     ["master", host, port] -> do
---       backend <- initializeBackend host port initRemoteTable
---       startMaster backend (master backend)
---     ["slave", host, port] -> do
---       backend <- initializeBackend host port initRemoteTable
---       startSlave backend
+  args <- getArgs
+  case args of
+    ["master", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startMaster backend (master backend)
+    ["slave", host, port] -> do
+      backend <- initializeBackend host port initRemoteTable
+      startSlave backend
