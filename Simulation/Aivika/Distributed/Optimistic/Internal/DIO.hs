@@ -14,6 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
+        invokeDIO,
         runDIO,
         defaultDIOParams,
         terminateSimulation,
@@ -108,6 +109,11 @@ instance MonadException DIO where
   throwComp e = DIO $ \ps ->
     throw e
 
+-- | Invoke the 'DIO' computation.
+invokeDIO :: DIOContext -> DIO a -> DP.Process a
+{-# INLINE invokeDIO #-}
+invokeDIO ps (DIO m) = m ps
+
 -- | Lift the distributed 'Process' computation.
 liftDistributedUnsafe :: DP.Process a -> DIO a
 liftDistributedUnsafe = DIO . const
@@ -141,26 +147,22 @@ timeServerId = DIO $ return . dioTimeServerId
 -- all nodes connected to the time server.
 terminateSimulation :: DIO ()
 terminateSimulation =
-  do sender   <- messageInboxId
+  do logDIO INFO "Terminating the simulation..."
+     sender   <- messageInboxId
      receiver <- timeServerId
      liftDistributedUnsafe $
-       do ---
-          DP.say "Terminating the simulation..."
-          ---
-          DP.send receiver (TerminateTimeServerMessage sender)
+       DP.send receiver (TerminateTimeServerMessage sender)
 
 -- | Unregister the simulation process from the time server
 -- without affecting the processes in other nodes connected to
 -- the corresponding time server.
 unregisterSimulation :: DIO ()
 unregisterSimulation =
-  do sender   <- messageInboxId
+  do logDIO INFO "Unregistering the simulation process..."
+     sender   <- messageInboxId
      receiver <- timeServerId
      liftDistributedUnsafe $
-       do ---
-          DP.say "Unregistering the simulation process..."
-          ---
-          DP.send receiver (UnregisterLocalProcessMessage sender)
+       DP.send receiver (UnregisterLocalProcessMessage sender)
 
 -- | Run the computation using the specified parameters and time server process identifier.
 runDIO :: DIO a -> DIOParams -> DP.ProcessId -> DP.Process a
@@ -174,11 +176,11 @@ runDIO m ps serverId =
             writeChannel ch m
           when (m == TerminateLocalProcessMessage) $
             do ---
-               DP.say "Terminating the inbox process..."
+               logProcess ps INFO "Terminating the inbox process..."
                ---
                DP.terminate
      ---
-     DP.say "Registering the simulation process..."
+     logProcess ps INFO "Registering the simulation process..."
      ---
      DP.send serverId (RegisterLocalProcessMessage inboxId)
      unDIO m DIOContext { dioChannel = ch,
@@ -195,3 +197,11 @@ logDIO p message =
        liftDistributedUnsafe $
        DP.say $
        embracePriority p ++ " " ++ message
+
+-- | Log the message with the specified priority.
+logProcess :: DIOParams -> Priority -> String -> DP.Process ()
+{-# INLINE logProcess #-}
+logProcess ps p message =
+  when (dioLoggingPriority ps <= p) $
+  DP.say $
+  embracePriority p ++ " " ++ message
