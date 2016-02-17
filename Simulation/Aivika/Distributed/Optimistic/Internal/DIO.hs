@@ -193,5 +193,5 @@ logDIO p message =
   do ps <- dioParams
      when (dioLoggingPriority ps <= p) $
        liftDistributedUnsafe $
-       DP.say message
-
+       DP.say $
+       embracePriority p ++ " " ++ message
