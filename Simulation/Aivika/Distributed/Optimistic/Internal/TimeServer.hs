@@ -120,7 +120,7 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
           return $ filter (/= pid) (M.keys m)
      forM_ pids $ \pid ->
        DP.send pid TerminateLocalProcessMessage
-     logTimeServer server INFO "TimeServer: terminating..."
+     logTimeServer server INFO "Time Server: terminating..."
      DP.terminate
 processTimeServerMessage server (GlobalTimeMessageResp pid t') =
   join $ liftIO $
@@ -222,6 +222,7 @@ timeServerGlobalTime server =
 timeServer :: TimeServerParams -> DP.Process ()
 timeServer ps =
   do server <- liftIO $ newTimeServer ps
+     logTimeServer server INFO "Time Server: starting..."
      forever $
        do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
           case m of
