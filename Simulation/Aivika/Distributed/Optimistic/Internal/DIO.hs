@@ -22,6 +22,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         messageChannel,
         messageInboxId,
         timeServerId,
+        logDIO,
         liftDistributedUnsafe) where
 
 import Data.Typeable
@@ -184,3 +185,13 @@ runDIO m ps serverId =
                           dioInboxId = inboxId,
                           dioTimeServerId = serverId,
                           dioParams0 = ps }
+
+-- | Log the message with the specified priority.
+logDIO :: Priority -> String -> DIO ()
+{-# INLINE logDIO #-}
+logDIO p message =
+  do ps <- dioParams
+     when (dioLoggingPriority ps <= p) $
+       liftDistributedUnsafe $
+       DP.say message
+
