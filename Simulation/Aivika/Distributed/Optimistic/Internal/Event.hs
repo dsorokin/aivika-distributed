@@ -382,7 +382,8 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
              then error "Inconsistent time: liftIO"
              else if t' == pointTime p
                   then liftIOUnsafe m
-                  else do ---
+                  else do t0 <- invokeEvent p $ R.readRef (queueTime q)
+                          ---
                           invokeEvent p logWaitingForIO
                           ---
                           sender   <- messageInboxId
@@ -393,4 +394,7 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                           liftIOUnsafe $ awaitChannel ch
                           invokeEvent p $
                             processChannelMessages
-                          invokeEvent p loop
+                          t2 <- invokeEvent p $ R.readRef (queueTime q)
+                          if t0 <= t2
+                            then invokeEvent p loop
+                            else error "Detected a premature IO action: liftIO"
