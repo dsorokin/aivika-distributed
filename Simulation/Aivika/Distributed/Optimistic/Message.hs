@@ -17,9 +17,7 @@ module Simulation.Aivika.Distributed.Optimistic.Message
         enqueueMessage,
         expectMessage,
         expectMessageTimeout,
-        messageReceived,
-        expectInputMessage,
-        expectInputMessageTimeout) where
+        messageReceived) where
 
 import Data.Time
 import Data.Monoid
