@@ -16,7 +16,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
         queueOutputMessages,
         queueLog,
         expectInputMessage,
-        expectInputMessageTimeout) where
+        expectInputMessageTimeout,
+        commitEvent) where
 
 import Data.IORef
 
@@ -392,8 +393,7 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
              then error "Inconsistent time: liftIO"
              else if t' == pointTime p
                   then liftIOUnsafe m
-                  else do t0 <- invokeEvent p $ R.readRef (queueTime q)
-                          ---
+                  else do ---
                           invokeEvent p logWaitingForIO
                           ---
                           sender   <- messageInboxId
@@ -404,10 +404,10 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                           dt <- fmap dioTimeServerMessageTimeout dioParams
                           liftIOUnsafe $
                             timeout dt $ awaitChannel ch
-                          invokeEvent p $
-                            processChannelMessages
-                          t2 <- invokeEvent p $ R.readRef (queueTime q)
-                          if t0 <= t2
+                          c <- invokeEvent p $
+                               commitEvent $
+                               processChannelMessages
+                          if c
                             then invokeEvent p loop
                             else do f <- fmap dioAllowPrematureIO dioParams
                                     if f
@@ -418,3 +418,17 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                                       else error $
                                            "Detected a premature IO action at t = " ++
                                            (show $ pointTime p) ++ ": liftIO"
+
+-- | Try to commit an effect of the computation and
+-- return a flag indicating whether there was no rollback.
+commitEvent :: Event DIO () -> Event DIO Bool
+commitEvent m =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     r <- liftIOUnsafe $ newIORef True
+     invokeEvent p $
+       writeLog (queueLog q) $
+       liftIOUnsafe $ writeIORef r False
+     invokeEvent p m
+     liftIOUnsafe $ readIORef r
+
