@@ -128,35 +128,36 @@ masterModel n =
 
 runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process ()
 runSlaveModel (timeServerId, masterId) =
-  runDIO m ps timeServerId
-    where
-      ps = defaultDIOParams
-      m  = runSimulation (slaveModel masterId) specs
+  do runDIO m ps timeServerId
+     return ()
+       where
+         ps = defaultDIOParams
+         m  = runSimulation (slaveModel masterId) specs
 
 -- remotable ['runSlaveModel, 'timeServer]
 
-runMasterModel :: DP.ProcessId -> Int -> DP.Process ()
+runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process Double)
 runMasterModel timeServerId n =
-  join $ runDIO m ps timeServerId
+  runDIO m ps timeServerId
     where
       ps = defaultDIOParams
       m  = do a <- runSimulation (masterModel n) specs
               terminateSimulation
-              return $
-                DP.say $
-                "The result is " ++ show a
+              return a
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
      -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
-     masterId <- DP.getSelfPid
+     (masterId, masterProcess) <- runMasterModel timeServerId 2
+     -- (masterId, masterProcess) <- runMasterModel timeServerId (length nodes)
      -- forM_ nodes $ \node ->
      --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..2] $ \i ->
        DP.spawnLocal $ runSlaveModel (timeServerId, masterId)
-     runMasterModel timeServerId 2
-     -- runMasterModel timeServerId (length nodes)
+     a <- masterProcess
+     DP.say $
+       "The result is " ++ show a
   
 main :: IO ()
 main = do
