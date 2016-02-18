@@ -1,5 +1,6 @@
 
-{-# LANGUAGE DeriveGeneric, TemplateHaskell #-}
+{--# LANGUAGE TemplateHaskell #--}
+{-# LANGUAGE DeriveGeneric #-}
 
 -- It corresponds to model MachRep1 described in document 
 -- Introduction to Discrete-Event Simulation and the SimPy Language
@@ -24,8 +25,6 @@ Fire up some slave nodes (for the example, we run them on a single machine):
 
 ./MachRep1Distributed slave localhost 8080 &
 ./MachRep1Distributed slave localhost 8081 &
-./MachRep1Distributed slave localhost 8082 &
-./MachRep1Distributed slave localhost 8083 &
 
 And start the master node:
 
@@ -132,7 +131,7 @@ runSlaveModel (timeServerId, masterId) =
       ps = defaultDIOParams
       m  = runSimulation (slaveModel masterId) specs
 
-remotable ['runSlaveModel]
+-- remotable ['runSlaveModel, 'timeServer]
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process ()
 runMasterModel timeServerId n =
@@ -145,22 +144,29 @@ runMasterModel timeServerId n =
                 DP.say $
                 "The result is " ++ show a
 
-master = \backend nodes@(_ : _) ->
+master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
+     -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
      masterId <- DP.getSelfPid
-     forM_ nodes $ \node ->
-       do DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
-          return ()
+     -- forM_ nodes $ \node ->
+     --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
+     forM_ [1..2] $ \i ->
+       DP.spawnLocal $ runSlaveModel (timeServerId, masterId)
      runMasterModel timeServerId (length nodes)
-
+  
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    ["master", host, port] -> do
-      backend <- initializeBackend host port initRemoteTable
-      startMaster backend (master backend)
-    ["slave", host, port] -> do
-      backend <- initializeBackend host port initRemoteTable
-      startSlave backend
+  backend <- initializeBackend "localhost" "8080" initRemoteTable
+  startMaster backend (master backend)
+
+-- main :: IO ()
+-- main = do
+--   args <- getArgs
+--   case args of
+--     ["master", host, port] -> do
+--       backend <- initializeBackend host port initRemoteTable
+--       startMaster backend (master backend)
+--     ["slave", host, port] -> do
+--       backend <- initializeBackend host port initRemoteTable
+--       startSlave backend
