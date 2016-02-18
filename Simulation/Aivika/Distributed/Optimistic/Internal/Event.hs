@@ -264,7 +264,9 @@ throttleMessageChannel =
      receiver <- timeServerId
      liftDistributedUnsafe $
        DP.send receiver (LocalTimeMessage sender $ pointTime p)
-     liftIOUnsafe $ awaitChannel ch
+     dt <- fmap dioTimeServerMessageTimeout dioParams
+     liftIOUnsafe $
+       timeout dt $ awaitChannel ch
      invokeEvent p $ processChannelMessages
 
 -- | Process the channel messages.
@@ -391,7 +393,9 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                           liftDistributedUnsafe $
                             DP.send receiver (LocalTimeMessage sender t)
                           ch <- messageChannel
-                          liftIOUnsafe $ awaitChannel ch
+                          dt <- fmap dioTimeServerMessageTimeout dioParams
+                          liftIOUnsafe $
+                            timeout dt $ awaitChannel ch
                           invokeEvent p $
                             processChannelMessages
                           t2 <- invokeEvent p $ R.readRef (queueTime q)

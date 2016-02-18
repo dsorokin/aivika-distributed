@@ -52,8 +52,10 @@ data DIOParams =
               -- ^ The undoable log size threshold used for detecting an overflow
               dioInputMessageQueueIndexThreshold :: Int,
               -- ^ The input message queue index threshold used for detecting an overflow
-              dioOutputMessageQueueSizeThreshold :: Int
+              dioOutputMessageQueueSizeThreshold :: Int,
               -- ^ The output message queue size threshold used for detecting an overflow
+              dioTimeServerMessageTimeout :: Int
+              -- ^ The timeout in microseconds after which a new message is sent to the time server again
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
@@ -124,7 +126,8 @@ defaultDIOParams =
   DIOParams { dioLoggingPriority = DEBUG,
               dioUndoableLogSizeThreshold = 500000,
               dioInputMessageQueueIndexThreshold = 10000,
-              dioOutputMessageQueueSizeThreshold = 10000
+              dioOutputMessageQueueSizeThreshold = 10000,
+              dioTimeServerMessageTimeout = 5000000
             }
 
 -- | Return the parameters of the current computation.
