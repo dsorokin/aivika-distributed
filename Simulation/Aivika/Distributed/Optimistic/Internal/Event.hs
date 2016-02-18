@@ -435,10 +435,7 @@ commitEvent :: Event DIO () -> Event DIO Bool
 commitEvent m =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     r <- liftIOUnsafe $ newIORef True
-     invokeEvent p $
-       writeLog (queueLog q) $
-       liftIOUnsafe $ writeIORef r False
+     v0 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
      invokeEvent p m
-     liftIOUnsafe $ readIORef r
-
+     v2 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
+     return (v0 == v2)

@@ -15,7 +15,10 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
         writeLog,
         rollbackLog,
         reduceLog,
-        logSize) where
+        logSize,
+        logRollbackVersion) where
+
+import Data.IORef
 
 import Control.Monad
 import Control.Monad.Trans
@@ -29,8 +32,10 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 
 -- | Specified an undoable log with ability to rollback the operations.
 data UndoableLog =
-  UndoableLog { logItems :: DLL.DoubleLinkedList UndoableItem
+  UndoableLog { logItems :: DLL.DoubleLinkedList UndoableItem,
                 -- ^ The items that can be undone.
+                logRollbackVersionRef :: IORef Int
+                -- ^ The version of the rollback.
               }
 
 data UndoableItem =
@@ -44,7 +49,9 @@ data UndoableItem =
 newUndoableLog :: DIO UndoableLog
 newUndoableLog =
   do xs <- liftIOUnsafe DLL.newList
-     return UndoableLog { logItems = xs }
+     v  <- liftIOUnsafe $ newIORef 0
+     return UndoableLog { logItems = xs,
+                          logRollbackVersionRef = v }
 
 -- | Write a new undoable operation.
 writeLog :: UndoableLog -> DIO () -> Event DIO ()
@@ -67,13 +74,17 @@ writeLog log h =
 -- | Rollback the log till the specified time including that one.
 rollbackLog :: UndoableLog -> Double -> DIO ()
 rollbackLog log t =
-  do f <- liftIOUnsafe $ DLL.listNull (logItems log)
-     unless f $
-       do x <- liftIOUnsafe $ DLL.listLast (logItems log)
-          when (t <= itemTime x) $
-            do liftIOUnsafe $ DLL.listRemoveLast (logItems log)
-               itemUndo x
-               rollbackLog log t
+  do liftIOUnsafe $ modifyIORef' (logRollbackVersionRef log) (+ 1)
+     loop
+       where
+         loop =
+           do f <- liftIOUnsafe $ DLL.listNull (logItems log)
+              unless f $
+                do x <- liftIOUnsafe $ DLL.listLast (logItems log)
+                   when (t <= itemTime x) $
+                     do liftIOUnsafe $ DLL.listRemoveLast (logItems log)
+                        itemUndo x
+                        loop
 
 -- | Reduce the log removing all items older than the specified time.
 reduceLog :: UndoableLog -> Double -> IO ()
@@ -88,3 +99,7 @@ reduceLog log t =
 -- | Return the log size.
 logSize :: UndoableLog -> IO Int
 logSize log = DLL.listCount (logItems log)
+
+-- | Return the rolback version.
+logRollbackVersion :: UndoableLog -> IO Int
+logRollbackVersion = readIORef . logRollbackVersionRef
