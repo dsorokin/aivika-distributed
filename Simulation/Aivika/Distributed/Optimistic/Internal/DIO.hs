@@ -170,8 +170,9 @@ unregisterSimulation =
      liftDistributedUnsafe $
        DP.send receiver (UnregisterLocalProcessMessage sender)
 
--- | Run the computation using the specified parameters and time server process identifier.
-runDIO :: DIO a -> DIOParams -> DP.ProcessId -> DP.Process a
+-- | Run the computation using the specified parameters along with time server process
+-- identifier and return the inbox process identifier and a new simulation process.
+runDIO :: DIO a -> DIOParams -> DP.ProcessId -> DP.Process (DP.ProcessId, DP.Process a)
 runDIO m ps serverId =
   do ch <- liftIO newChannel
      inboxId <-
@@ -189,10 +190,10 @@ runDIO m ps serverId =
      logProcess ps INFO "Registering the simulation process..."
      ---
      DP.send serverId (RegisterLocalProcessMessage inboxId)
-     unDIO m DIOContext { dioChannel = ch,
-                          dioInboxId = inboxId,
-                          dioTimeServerId = serverId,
-                          dioParams0 = ps }
+     return (inboxId, unDIO m DIOContext { dioChannel = ch,
+                                           dioInboxId = inboxId,
+                                           dioTimeServerId = serverId,
+                                           dioParams0 = ps })
 
 -- | Log the message with the specified priority.
 logDIO :: Priority -> String -> DIO ()
