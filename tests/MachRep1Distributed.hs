@@ -92,6 +92,8 @@ slaveModel masterId =
        sendMessage masterId SubSimulationCompleted
      ---
 
+     liftComp terminateSimulation
+
 -- | The main model.       
 masterModel :: Int -> Simulation DIO Double
 masterModel n =
