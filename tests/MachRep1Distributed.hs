@@ -155,7 +155,8 @@ master = \backend nodes ->
      --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..2] $ \i ->
        DP.spawnLocal $ runSlaveModel (timeServerId, masterId)
-     runMasterModel timeServerId (length nodes)
+     runMasterModel timeServerId 2
+     -- runMasterModel timeServerId (length nodes)
   
 main :: IO ()
 main = do
