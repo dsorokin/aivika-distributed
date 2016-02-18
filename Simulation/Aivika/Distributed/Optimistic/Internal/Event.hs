@@ -219,7 +219,12 @@ processCurrentEvents = Event r where
 expectInputMessage :: Event DIO ()
 expectInputMessage =
   Event $ \p ->
-  do ch <- messageChannel
+  do ---
+     logDIO DEBUG $
+       "t = " ++ (show $ pointTime p) ++
+       ": expecting an input message"
+     ---
+     ch <- messageChannel
      liftIOUnsafe $ awaitChannel ch
      invokeEvent p processCurrentEvents
 
@@ -227,7 +232,12 @@ expectInputMessage =
 expectInputMessageTimeout :: Int -> Event DIO Bool
 expectInputMessageTimeout dt =
   Event $ \p ->
-  do ch <- messageChannel
+  do ---
+     logDIO DEBUG $
+       "t = " ++ (show $ pointTime p) ++
+       ": expecting an input message with timeout " ++ show dt
+     ---
+     ch <- messageChannel
      f  <- liftIOUnsafe $
            timeout dt $
            awaitChannel ch
