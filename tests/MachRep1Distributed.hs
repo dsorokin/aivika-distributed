@@ -126,24 +126,23 @@ masterModel n =
      
      runEventInStopTime upTimeProp
 
-runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process ()
+runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Process ())
 runSlaveModel (timeServerId, masterId) =
-  do runDIO m ps timeServerId
-     return ()
-       where
-         ps = defaultDIOParams
-         m  = runSimulation (slaveModel masterId) specs
+  runDIO m ps timeServerId
+  where
+    ps = defaultDIOParams
+    m  = runSimulation (slaveModel masterId) specs
 
 -- remotable ['runSlaveModel, 'timeServer]
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process Double)
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
-    where
-      ps = defaultDIOParams
-      m  = do a <- runSimulation (masterModel n) specs
-              terminateSimulation
-              return a
+  where
+    ps = defaultDIOParams
+    m  = do a <- runSimulation (masterModel n) specs
+            terminateSimulation
+            return a
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
@@ -154,7 +153,8 @@ master = \backend nodes ->
      -- forM_ nodes $ \node ->
      --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..2] $ \i ->
-       DP.spawnLocal $ runSlaveModel (timeServerId, masterId)
+       do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
+          slaveProcess
      a <- masterProcess
      DP.say $
        "The result is " ++ show a
