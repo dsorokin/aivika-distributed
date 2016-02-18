@@ -76,8 +76,8 @@ expectMessage signal =
   do pid <- liftSimulation newProcessId
      spawnProcessUsingIdWith CancelChildAfterParent pid $
        let loop =
-             do liftEvent expectInputMessage
-                loop
+             do f <- liftEvent $ commitEvent expectInputMessage
+                when f loop
        in loop
      processAwait $
        flip mapSignalM signal $ \a ->
@@ -91,17 +91,18 @@ expectMessageTimeout timeout signal =
      src <- liftSimulation newSignalSource
      pid <- liftSimulation newProcessId
      spawnProcessUsingIdWith CancelChildAfterParent pid $
-       let loop dt =
-             do liftEvent $ expectInputMessageTimeout dt
-                when (dt > 0) $
-                  do t1 <- liftComp $ liftIOUnsafe getCurrentTime
-                     let dt' = timeout - truncate (1000000 * diffUTCTime t1 t0)
-                     if dt' > 0
-                       then loop dt'
-                       else return ()
-       in do loop timeout
-             liftEvent $
-               triggerSignal src Nothing
+       let exit = liftEvent $ triggerSignal src Nothing
+           loop dt =
+             do f <- liftEvent $ commitEvent $ void $ expectInputMessageTimeout dt
+                when f $
+                  if dt > 0
+                  then do t1 <- liftComp $ liftIOUnsafe getCurrentTime
+                          let dt' = timeout - truncate (1000000 * diffUTCTime t1 t0)
+                          if dt' > 0
+                            then loop dt'
+                            else exit
+                  else exit
+       in loop timeout
      let signal' = fmap Just signal <> publishSignal src
      processAwait $
        flip mapSignalM signal' $ \a ->
