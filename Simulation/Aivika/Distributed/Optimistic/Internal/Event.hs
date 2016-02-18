@@ -361,6 +361,14 @@ logWaitingForIO =
        ", global t = " ++ (show t') ++
        ": waiting for IO..."
 
+-- | Log an evidence of the premature IO.
+logPrematureIO :: Event DIO ()
+logPrematureIO =
+  Event $ \p ->
+  logDIO ERROR $
+  "t = " ++ (show $ pointTime p) ++
+  ": detected a premature IO action"
+
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
 reduceEvents t =
@@ -401,6 +409,12 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                           t2 <- invokeEvent p $ R.readRef (queueTime q)
                           if t0 <= t2
                             then invokeEvent p loop
-                            else error $
-                                 "Detected a premature IO action at t = " ++
-                                 (show $ pointTime p) ++ ": liftIO"
+                            else do f <- fmap dioAllowPrematureIO dioParams
+                                    if f
+                                      then do ---
+                                              invokeEvent p $ logPrematureIO
+                                              ---
+                                              invokeEvent p loop
+                                      else error $
+                                           "Detected a premature IO action at t = " ++
+                                           (show $ pointTime p) ++ ": liftIO"
