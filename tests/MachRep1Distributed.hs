@@ -154,7 +154,7 @@ master = \backend nodes ->
      --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..2] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
-          slaveProcess
+          DP.spawnLocal slaveProcess
      a <- masterProcess
      DP.say $
        "The result is " ++ show a
