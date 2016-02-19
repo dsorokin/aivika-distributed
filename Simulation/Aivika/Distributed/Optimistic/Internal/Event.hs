@@ -14,8 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
-        queueLog,
-        runTimeWarp) where
+        queueLog) where
 
 import Data.IORef
 
@@ -98,17 +97,20 @@ instance EventQueueing DIO where
 
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
+{-# INLINE currentEventPoint #-}
 currentEventPoint =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      t' <- invokeEvent p $ R.readRef (queueTime q)
-     let sc = pointSpecs p
-         t0 = spcStartTime sc
-         dt = spcDT sc
-         n' = fromIntegral $ floor ((t' - t0) / dt)
-     return p { pointTime = t',
-                pointIteration = n',
-                pointPhase = -1 }
+     if t' == pointTime p
+       then return p
+       else let sc = pointSpecs p
+                t0 = spcStartTime sc
+                dt = spcDT sc
+                n' = fromIntegral $ floor ((t' - t0) / dt)
+            in return p { pointTime = t',
+                          pointIteration = n',
+                          pointPhase = -1 }
 
 -- | Process the pending events.
 processPendingEventsCore :: Bool -> Dynamics DIO ()
@@ -120,39 +122,39 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
        f' <- invokeEvent p0 $ R.readRef f
        unless f' $
          do invokeEvent p0 $ R.writeRef f True
-            p1 <- call q p p0
+            call q p p0
+            p1 <- invokeEvent p0 currentEventPoint
             invokeEvent p1 $ R.writeRef f False
   call q p p0 =
     do let pq = queuePQ q
            r  = pointRun p
        -- process external messages
-       ok <- invokeEvent p0 $ runTimeWarp processChannelMessages
+       p1 <- invokeEvent p0 currentEventPoint
+       ok <- invokeEvent p1 $ runTimeWarp processChannelMessages
        if not ok
-         then do p2 <- invokeEvent p0 currentEventPoint
+         then do p2 <- invokeEvent p1 currentEventPoint
                  call q p p2
          else do -- proceed with processing the events
-                 f <- invokeEvent p0 $ fmap PQ.queueNull $ R.readRef pq
-                 if f
-                   then return p0
-                   else do (t2, c2) <- invokeEvent p0 $ fmap PQ.queueFront $ R.readRef pq
-                           let t = queueTime q
-                           t' <- invokeEvent p0 $ R.readRef t
-                           when (t2 < t') $ 
-                             error "The time value is too small: processPendingEventsCore"
-                           if ((t2 < pointTime p) ||
-                               (includingCurrentEvents && (t2 == pointTime p)))
-                             then do invokeEvent p0 $ R.writeRef t t2
-                                     invokeEvent p0 $ R.modifyRef pq PQ.dequeue
-                                     let sc = pointSpecs p
-                                         t0 = spcStartTime sc
-                                         dt = spcDT sc
-                                         n2 = fromIntegral $ floor ((t2 - t0) / dt)
-                                         p2 = p { pointTime = t2,
-                                                  pointIteration = n2,
-                                                  pointPhase = -1 }
-                                     c2 p2
-                                     call q p p2
-                             else return p0
+                 f <- invokeEvent p1 $ fmap PQ.queueNull $ R.readRef pq
+                 unless f $
+                   do (t2, c2) <- invokeEvent p1 $ fmap PQ.queueFront $ R.readRef pq
+                      let t = queueTime q
+                      t' <- invokeEvent p1 $ R.readRef t
+                      when (t2 < t') $ 
+                        error "The time value is too small: processPendingEventsCore"
+                      when ((t2 < pointTime p) ||
+                            (includingCurrentEvents && (t2 == pointTime p))) $
+                        do invokeEvent p1 $ R.writeRef t t2
+                           invokeEvent p1 $ R.modifyRef pq PQ.dequeue
+                           let sc = pointSpecs p
+                               t0 = spcStartTime sc
+                               dt = spcDT sc
+                               n2 = fromIntegral $ floor ((t2 - t0) / dt)
+                               p2 = p { pointTime = t2,
+                                        pointIteration = n2,
+                                        pointPhase = -1 }
+                           c2 p2
+                           call q p p2
 
 -- | Process the pending events synchronously, i.e. without past.
 processPendingEvents :: Bool -> Dynamics DIO ()
