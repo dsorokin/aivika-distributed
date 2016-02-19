@@ -61,11 +61,7 @@ specs = Specs { spcStartTime = 0.0,
 newtype TotalUpTimeChange = TotalUpTimeChange { runTotalUpTimeChange :: Double }
                           deriving (Eq, Ord, Show, Typeable, Generic)
 
-data SubSimulationCompleted = SubSimulationCompleted
-                              deriving (Eq, Ord, Show, Typeable, Generic)
-
 instance Binary TotalUpTimeChange
-instance Binary SubSimulationCompleted
 
 -- | A sub-model.
 slaveModel :: DP.ProcessId -> Simulation DIO ()
@@ -87,12 +83,8 @@ slaveModel masterId =
 
      runProcessInStartTime machine
 
-     ---
      runEventInStopTime $
-       sendMessage masterId SubSimulationCompleted
-     ---
-
-     liftComp unregisterSimulation
+       unregisterSimulation
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO Double
@@ -106,14 +98,6 @@ masterModel n =
      runEventInStartTime $
        handleSignal totalUpTimeChanged $ \x ->
        modifyRef totalUpTime (+ runTotalUpTimeChange x)
-
-     let subSimulationCompleted :: Signal DIO SubSimulationCompleted
-         subSimulationCompleted = messageReceived
-
-     runProcessInStopTime $
-       forM_ [1..n] $ \_ ->
-       do expectMessage subSimulationCompleted
-          return ()
      ---
      
      let upTimeProp =
