@@ -38,6 +38,7 @@ import Control.Exception (throw)
 import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Trans.Exception
+import Simulation.Aivika.Trans.Internal.Types
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
@@ -154,8 +155,9 @@ timeServerId = DIO $ return . dioTimeServerId
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
-terminateSimulation :: DIO ()
+terminateSimulation :: Event DIO ()
 terminateSimulation =
+  Event $ \p ->
   do logDIO INFO "Terminating the simulation..."
      sender   <- messageInboxId
      receiver <- timeServerId
@@ -165,8 +167,9 @@ terminateSimulation =
 -- | Unregister the simulation process from the time server
 -- without affecting the processes in other nodes connected to
 -- the corresponding time server.
-unregisterSimulation :: DIO ()
+unregisterSimulation :: Event DIO ()
 unregisterSimulation =
+  Event $ \p ->
   do logDIO INFO "Unregistering the simulation process..."
      sender   <- messageInboxId
      receiver <- timeServerId
