@@ -20,6 +20,7 @@ module Simulation.Aivika.Distributed.Optimistic.DIO
         messageInboxId,
         timeServerId,
         logDIO,
+        syncSimulation,
         terminateSimulation,
         unregisterSimulation) where
 
