@@ -247,6 +247,12 @@ processChannelMessage x@(QueueMessage m) =
      invokeEvent p $
        logMessage x
      ---
+     t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     when (messageReceiveTime m < t0) $
+       do f <- fmap dioAllowProcessingOutdatedMessage dioParams
+          if f
+            then invokeEvent p logOutdatedMessage
+            else error "Received the outdated message: processChannelMessage"
      invokeTimeWarp p $
        enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(GlobalTimeMessage globalTime) =
@@ -323,6 +329,14 @@ logPrematureIO =
   logDIO ERROR $
   "t = " ++ (show $ pointTime p) ++
   ": detected a premature IO action"
+
+-- | Log an evidence of receiving the outdated message.
+logOutdatedMessage :: Event DIO ()
+logOutdatedMessage =
+  Event $ \p ->
+  logDIO ERROR $
+  "t = " ++ (show $ pointTime p) ++
+  ": received the outdated message"
 
 -- | Log that the events must be synchronized.
 logSyncEvents :: Event DIO ()

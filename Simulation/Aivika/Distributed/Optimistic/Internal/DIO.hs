@@ -56,8 +56,10 @@ data DIOParams =
               -- ^ The output message queue size threshold used for detecting an overflow
               dioTimeServerMessageTimeout :: Int,
               -- ^ The timeout in microseconds after which a new message is sent to the time server again
-              dioAllowPrematureIO :: Bool
+              dioAllowPrematureIO :: Bool,
               -- ^ Whether to allow performing the premature IO action; otherwise, raise an error
+              dioAllowProcessingOutdatedMessage :: Bool
+              -- ^ Whether to allow processing an outdated message with the receive time less than the global time
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
@@ -130,7 +132,8 @@ defaultDIOParams =
               dioInputMessageQueueIndexThreshold = 10000,
               dioOutputMessageQueueSizeThreshold = 10000,
               dioTimeServerMessageTimeout = 5000000,
-              dioAllowPrematureIO = True
+              dioAllowPrematureIO = True,
+              dioAllowProcessingOutdatedMessage = True
             }
 
 -- | Return the parameters of the current computation.
