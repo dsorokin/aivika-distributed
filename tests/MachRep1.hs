@@ -64,8 +64,8 @@ model =
      
      runEventInStopTime upTimeProp
 
-simulate :: DP.ProcessId -> DP.Process ()
-simulate pid =
+runModel :: DP.ProcessId -> DP.Process ()
+runModel timeServerId =
   do DP.say "Started simulating..."
      let m =
            do a <- runSimulation model specs
@@ -73,12 +73,13 @@ simulate pid =
               return $
                 DP.say $
                 "The result is " ++ show a
-     join $ runDIO m defaultDIOParams pid
+     (modelId, modelProcess) <- runDIO m defaultDIOParams timeServerId
+     join modelProcess
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     serverId  <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     simulate serverId
+     timeServerId  <- DP.spawnLocal $ timeServer defaultTimeServerParams
+     runModel timeServerId
      liftIO $
        threadDelay 1000000
   
