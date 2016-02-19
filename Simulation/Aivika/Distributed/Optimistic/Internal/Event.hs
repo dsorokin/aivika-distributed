@@ -313,16 +313,16 @@ logMessage m =
   "t = " ++ (show $ pointTime p) ++
   ": " ++ show m
 
--- | Log that the process is waiting for IO.
-logWaitingForIO :: Event DIO ()
-logWaitingForIO =
+-- | Log that the local time is to be synchronized.
+logSyncLocalTime :: Event DIO ()
+logSyncLocalTime =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      logDIO DEBUG $
        "t = " ++ (show $ pointTime p) ++
        ", global t = " ++ (show t') ++
-       ": waiting for IO..."
+       ": synchronizing the local time..."
 
 -- | Log an evidence of the premature IO.
 logPrematureIO :: Event DIO ()
@@ -340,17 +340,6 @@ logOutdatedMessage =
   "t = " ++ (show $ pointTime p) ++
   ": received the outdated message"
 
--- | Log that the events must be synchronized.
-logSyncEvents :: Event DIO ()
-logSyncEvents =
-  Event $ \p ->
-  do let q = runEventQueue $ pointRun p
-     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     logDIO DEBUG $
-       "t = " ++ (show $ pointTime p) ++
-       ", global t = " ++ (show t') ++
-       ": synchronizing the events..."
-
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
 reduceEvents t =
@@ -363,42 +352,51 @@ reduceEvents t =
 
 instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
 
-  liftIO m = loop
-    where
-      loop =
-        Event $ \p ->
-        do let q = runEventQueue $ pointRun p
-               t = pointTime p
-           t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-           if t' > t
-             then error "Inconsistent time: liftIO"
-             else if t' == pointTime p
-                  then liftIOUnsafe m
-                  else do ---
-                          invokeEvent p logWaitingForIO
-                          ---
-                          sender   <- messageInboxId
-                          receiver <- timeServerId
-                          liftDistributedUnsafe $
-                            DP.send receiver (LocalTimeMessage sender t)
-                          ch <- messageChannel
-                          dt <- fmap dioTimeServerMessageTimeout dioParams
-                          liftIOUnsafe $
-                            timeout dt $ awaitChannel ch
-                          ok <- invokeEvent p $
-                                runTimeWarp $
-                                processChannelMessages
-                          if ok
-                            then invokeEvent p loop
-                            else do f <- fmap dioAllowPrematureIO dioParams
-                                    if f
-                                      then do ---
-                                              invokeEvent p $ logPrematureIO
-                                              ---
-                                              invokeEvent p loop
-                                      else error $
-                                           "Detected a premature IO action at t = " ++
-                                           (show $ pointTime p) ++ ": liftIO"
+  liftIO m =
+    Event $ \p ->
+    do ok <- invokeEvent p $
+             runTimeWarp $
+             syncLocalTime $
+             return ()
+       if ok
+         then liftIOUnsafe m
+         else do f <- fmap dioAllowPrematureIO dioParams
+                 if f
+                   then do ---
+                           invokeEvent p $ logPrematureIO
+                           ---
+                           liftIOUnsafe m
+                   else error $
+                        "Detected a premature IO action at t = " ++
+                        (show $ pointTime p) ++ ": liftIO"
+
+-- | Synchronize the local time executing the specified computation.
+syncLocalTime :: Dynamics DIO () -> TimeWarp DIO ()
+syncLocalTime m =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+         t = pointTime p
+     invokeDynamics p m
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     if t' > t
+       then error "Inconsistent time: syncLocalTime"
+       else if t' == pointTime p
+            then return ()
+            else do ---
+                    invokeEvent p logSyncLocalTime
+                    ---
+                    sender   <- messageInboxId
+                    receiver <- timeServerId
+                    liftDistributedUnsafe $
+                      DP.send receiver (LocalTimeMessage sender t)
+                    ch <- messageChannel
+                    dt <- fmap dioTimeServerMessageTimeout dioParams
+                    liftIOUnsafe $
+                      timeout dt $ awaitChannel ch
+                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
+                    if ok
+                      then invokeTimeWarp p $ syncLocalTime m
+                      else return ()
 
 -- | Run the computation and return a flag indicating whether there was no rollback.
 runTimeWarp :: TimeWarp DIO () -> Event DIO Bool
@@ -414,27 +412,10 @@ runTimeWarp m =
 syncEvents :: EventProcessing -> Event DIO ()
 syncEvents processing =
   Event $ \p ->
-  do let q = runEventQueue $ pointRun p
-         t = pointTime p
-     invokeDynamics p $
-       processEvents processing
-     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     if t' > t
-       then error "Inconsistent time: syncSimulation"
-       else if t' == pointTime p
-            then return ()
-            else do ---
-                    invokeEvent p logSyncEvents
-                    ---
-                    sender   <- messageInboxId
-                    receiver <- timeServerId
-                    liftDistributedUnsafe $
-                      DP.send receiver (LocalTimeMessage sender t)
-                    ch <- messageChannel
-                    dt <- fmap dioTimeServerMessageTimeout dioParams
-                    liftIOUnsafe $
-                      timeout dt $ awaitChannel ch
-                    invokeTimeWarp p $
-                      processChannelMessages
-                    invokeEvent p $
-                      syncEvents processing
+  do ok <- invokeEvent p $
+           runTimeWarp $
+           syncLocalTime $
+           processEvents processing
+     unless ok $
+       invokeEvent p $
+       syncEvents processing
