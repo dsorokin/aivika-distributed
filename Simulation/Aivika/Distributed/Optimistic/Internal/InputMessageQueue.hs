@@ -39,6 +39,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
+import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
@@ -101,9 +102,9 @@ messageEnqueued :: InputMessageQueue -> Signal DIO Message
 messageEnqueued q = publishSignal (inputMessageSource q)
 
 -- | Enqueue a new message ignoring the duplicated messages.
-enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
+enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 enqueueMessage q m =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
      let t  = messageReceiveTime m
          t0 = pointTime p

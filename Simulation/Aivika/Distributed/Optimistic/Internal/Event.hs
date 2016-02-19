@@ -15,9 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
-        expectInputMessage,
-        expectInputMessageTimeout,
-        commitEvent) where
+        runTimeWarp) where
 
 import Data.IORef
 
@@ -38,6 +36,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
@@ -88,7 +87,7 @@ instance EventQueueing DIO where
 
   runEventWith processing (Event e) =
     Dynamics $ \p ->
-    do invokeDynamics p $ processEvents processing
+    do invokeEvent p $ syncEvents processing
        e p
 
   eventQueueCount =
@@ -98,9 +97,9 @@ instance EventQueueing DIO where
        fmap PQ.queueCount $ R.readRef pq
 
 -- | Return the current event point.
-currentEventPoint :: Dynamics DIO (Point DIO)
+currentEventPoint :: Event DIO (Point DIO)
 currentEventPoint =
-  Dynamics $ \p ->
+  Event $ \p ->
   do let q = runEventQueue $ pointRun p
      t' <- invokeEvent p $ R.readRef (queueTime q)
      let sc = pointSpecs p
@@ -117,7 +116,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
   r p =
     do let q = runEventQueue $ pointRun p
            f = queueBusy q
-       p0 <- invokeDynamics p currentEventPoint
+       p0 <- invokeEvent p currentEventPoint
        f' <- invokeEvent p0 $ R.readRef f
        unless f' $
          do invokeEvent p0 $ R.writeRef f True
@@ -127,9 +126,9 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
     do let pq = queuePQ q
            r  = pointRun p
        -- process external messages
-       s <- invokeEvent p0 $ commitEvent processChannelMessages
-       if not s
-         then do p2 <- invokeDynamics p0 currentEventPoint
+       ok <- invokeEvent p0 $ runTimeWarp processChannelMessages
+       if not ok
+         then do p2 <- invokeEvent p0 currentEventPoint
                  call q p p2
          else do -- proceed with processing the events
                  f <- invokeEvent p0 $ fmap PQ.queueNull $ R.readRef pq
@@ -192,64 +191,6 @@ processEvents EarlierEvents = processEventsIncludingEarlier
 processEvents CurrentEventsOrFromPast = processEventsIncludingCurrentCore
 processEvents EarlierEventsOrFromPast = processEventsIncludingEarlierCore
 
--- | Process the current events only.
-processCurrentEvents :: Event DIO ()
-processCurrentEvents = Event r where
-  r p =
-    let q = runEventQueue $ pointRun p
-        p0 = p
-    in call q p p0
-  call q p p0 =
-    do let pq = queuePQ q
-           r  = pointRun p
-       -- process external messages
-       invokeEvent p0 processChannelMessages
-       -- proceed with processing the events
-       f <- invokeEvent p0 $ fmap PQ.queueNull $ R.readRef pq
-       unless f $
-         do (t2, c2) <- invokeEvent p0 $ fmap PQ.queueFront $ R.readRef pq
-            let t = queueTime q
-            t' <- invokeEvent p0 $ R.readRef t
-            when (t2 < t') $ 
-              error "The time value is too small: processCurrentEvents"
-            when (t2 == pointTime p) $
-              do invokeEvent p0 $ R.writeRef t t2
-                 invokeEvent p0 $ R.modifyRef pq PQ.dequeue
-                 c2 p
-                 call q p p0
-
--- | Expect any input message.
-expectInputMessage :: Event DIO ()
-expectInputMessage =
-  Event $ \p ->
-  do ---
-     logDIO DEBUG $
-       "t = " ++ (show $ pointTime p) ++
-       ": expecting an input message"
-     ---
-     ch <- messageChannel
-     liftIOUnsafe $ awaitChannel ch
-     invokeEvent p processCurrentEvents
-
--- | Like 'expectInputMessage' but with a timeout in microseconds.
-expectInputMessageTimeout :: Int -> Event DIO Bool
-expectInputMessageTimeout dt =
-  Event $ \p ->
-  do ---
-     logDIO DEBUG $
-       "t = " ++ (show $ pointTime p) ++
-       ": expecting an input message with timeout " ++ show dt
-     ---
-     ch <- messageChannel
-     f  <- liftIOUnsafe $
-           timeout dt $
-           awaitChannel ch
-     case f of
-       Nothing -> return False
-       Just _  ->
-         do invokeEvent p processCurrentEvents
-            return True
-
 -- | Whether there is an overflow.
 isEventOverflow :: Event DIO Bool
 isEventOverflow =
@@ -270,9 +211,9 @@ isEventOverflow =
        else return False
 
 -- | Throttle the message channel.
-throttleMessageChannel :: Event DIO ()
+throttleMessageChannel :: TimeWarp DIO ()
 throttleMessageChannel =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do ch       <- messageChannel
      sender   <- messageInboxId
      receiver <- timeServerId
@@ -281,35 +222,35 @@ throttleMessageChannel =
      dt <- fmap dioTimeServerMessageTimeout dioParams
      liftIOUnsafe $
        timeout dt $ awaitChannel ch
-     invokeEvent p $ processChannelMessages
+     invokeTimeWarp p $ processChannelMessages
 
 -- | Process the channel messages.
-processChannelMessages :: Event DIO ()
+processChannelMessages :: TimeWarp DIO ()
 processChannelMessages =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do ch <- messageChannel
      f  <- liftIOUnsafe $ channelEmpty ch
      unless f $
        do xs <- liftIOUnsafe $ readChannel ch
           forM_ xs $
-            invokeEvent p . processChannelMessage
+            invokeTimeWarp p . processChannelMessage
      f2 <- invokeEvent p isEventOverflow
      when f2 $
-       invokeEvent p throttleMessageChannel
+       invokeTimeWarp p throttleMessageChannel
 
 -- | Process the channel message.
-processChannelMessage :: LocalProcessMessage -> Event DIO ()
+processChannelMessage :: LocalProcessMessage -> TimeWarp DIO ()
 processChannelMessage x@(QueueMessage m) =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
      invokeEvent p $
        logMessage x
      ---
-     invokeEvent p $
+     invokeTimeWarp p $
        enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(GlobalTimeMessage globalTime) =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
          t = pointTime p
      ---
@@ -328,7 +269,7 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      liftDistributedUnsafe $
        DP.send receiver (GlobalTimeMessageResp sender t)
 processChannelMessage x@(LocalTimeMessageResp globalTime) =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
      invokeEvent p $
@@ -339,7 +280,7 @@ processChannelMessage x@(LocalTimeMessageResp globalTime) =
      invokeEvent p $
        reduceEvents globalTime
 processChannelMessage x@TerminateLocalProcessMessage =
-  Event $ \p ->
+  TimeWarp $ \p ->
   do ---
      invokeEvent p $
        logMessage x
@@ -383,6 +324,17 @@ logPrematureIO =
   "t = " ++ (show $ pointTime p) ++
   ": detected a premature IO action"
 
+-- | Log that the events must be synchronized.
+logSyncEvents :: Event DIO ()
+logSyncEvents =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     logDIO DEBUG $
+       "t = " ++ (show $ pointTime p) ++
+       ", global t = " ++ (show t') ++
+       ": synchronizing the events..."
+
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
 reduceEvents t =
@@ -417,10 +369,10 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                           dt <- fmap dioTimeServerMessageTimeout dioParams
                           liftIOUnsafe $
                             timeout dt $ awaitChannel ch
-                          s <- invokeEvent p $
-                               commitEvent $
-                               processChannelMessages
-                          if s
+                          ok <- invokeEvent p $
+                                runTimeWarp $
+                                processChannelMessages
+                          if ok
                             then invokeEvent p loop
                             else do f <- fmap dioAllowPrematureIO dioParams
                                     if f
@@ -432,13 +384,41 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                                            "Detected a premature IO action at t = " ++
                                            (show $ pointTime p) ++ ": liftIO"
 
--- | Try to commit an effect of the computation and
--- return a flag indicating whether there was no rollback.
-commitEvent :: Event DIO () -> Event DIO Bool
-commitEvent m =
+-- | Run the computation and return a flag indicating whether there was no rollback.
+runTimeWarp :: TimeWarp DIO () -> Event DIO Bool
+runTimeWarp m =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      v0 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
-     invokeEvent p m
+     invokeTimeWarp p m
      v2 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
      return (v0 == v2)
+
+-- | Synchronize the events.
+syncEvents :: EventProcessing -> Event DIO ()
+syncEvents processing =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+         t = pointTime p
+     invokeDynamics p $
+       processEvents processing
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     if t' > t
+       then error "Inconsistent time: syncSimulation"
+       else if t' == pointTime p
+            then return ()
+            else do ---
+                    invokeEvent p logSyncEvents
+                    ---
+                    sender   <- messageInboxId
+                    receiver <- timeServerId
+                    liftDistributedUnsafe $
+                      DP.send receiver (LocalTimeMessage sender t)
+                    ch <- messageChannel
+                    dt <- fmap dioTimeServerMessageTimeout dioParams
+                    liftIOUnsafe $
+                      timeout dt $ awaitChannel ch
+                    invokeTimeWarp p $
+                      processChannelMessages
+                    invokeEvent p $
+                      syncEvents processing

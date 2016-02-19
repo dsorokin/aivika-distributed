@@ -15,8 +15,6 @@
 module Simulation.Aivika.Distributed.Optimistic.Message
        (sendMessage,
         enqueueMessage,
-        expectMessage,
-        expectMessageTimeout,
         messageReceived) where
 
 import Data.Time
@@ -66,48 +64,6 @@ enqueueMessage pid t a =
                              messageData = binaryData
                            }
      OMQ.sendMessage queue message
-
--- | Blocks the simulation until the specified signal is triggered which
--- must depend directly or indirectly on the 'messageReceived' signal.
--- The modeling time does not change, even though the resulting action
--- has the 'Process' type.
-expectMessage :: Signal DIO a -> Process DIO a
-expectMessage signal =
-  do pid <- liftSimulation newProcessId
-     spawnProcessUsingIdWith CancelChildAfterParent pid $
-       let loop =
-             do f <- liftEvent $ commitEvent expectInputMessage
-                when f loop
-       in loop
-     processAwait $
-       flip mapSignalM signal $ \a ->
-       do cancelProcessWithId pid
-          return a
-
--- | Like 'expectMessage' but with a timeout in microseconds.
-expectMessageTimeout :: Int -> Signal DIO a -> Process DIO (Maybe a)
-expectMessageTimeout timeout signal =
-  do t0  <- liftComp $ liftIOUnsafe getCurrentTime
-     src <- liftSimulation newSignalSource
-     pid <- liftSimulation newProcessId
-     spawnProcessUsingIdWith CancelChildAfterParent pid $
-       let exit = liftEvent $ triggerSignal src Nothing
-           loop dt =
-             do f <- liftEvent $ commitEvent $ void $ expectInputMessageTimeout dt
-                when f $
-                  if dt > 0
-                  then do t1 <- liftComp $ liftIOUnsafe getCurrentTime
-                          let dt' = timeout - truncate (1000000 * diffUTCTime t1 t0)
-                          if dt' > 0
-                            then loop dt'
-                            else exit
-                  else exit
-       in loop timeout
-     let signal' = fmap Just signal <> publishSignal src
-     processAwait $
-       flip mapSignalM signal' $ \a ->
-       do cancelProcessWithId pid
-          return a
           
 -- | The signal triggered when the remote message of the specified type has come.
 messageReceived :: forall a. Serializable a => Signal DIO a

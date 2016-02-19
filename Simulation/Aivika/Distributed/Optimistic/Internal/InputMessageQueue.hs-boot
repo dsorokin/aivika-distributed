@@ -25,6 +25,7 @@ import Simulation.Aivika.Trans.Signal
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
+import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
 
 data InputMessageQueue
 
@@ -37,7 +38,7 @@ inputMessageQueueIndex :: InputMessageQueue -> IO Int
 
 inputMessageQueueSize :: InputMessageQueue -> IO Int
 
-enqueueMessage :: InputMessageQueue -> Message -> Event DIO ()
+enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
 

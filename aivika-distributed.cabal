@@ -40,6 +40,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Internal.Priority
                      Simulation.Aivika.Distributed.Optimistic.Internal.Ref
                      Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
+                     Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
                      Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 
     build-depends:   base >= 3 && < 6,
