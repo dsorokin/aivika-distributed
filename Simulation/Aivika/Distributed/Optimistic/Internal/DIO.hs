@@ -155,9 +155,8 @@ timeServerId = DIO $ return . dioTimeServerId
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
-terminateSimulation :: Event DIO ()
+terminateSimulation :: DIO ()
 terminateSimulation =
-  Event $ \p ->
   do logDIO INFO "Terminating the simulation..."
      sender   <- messageInboxId
      receiver <- timeServerId
