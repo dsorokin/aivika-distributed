@@ -17,6 +17,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
         queueLog,
         syncSimulation) where
 
+import Data.Maybe
 import Data.IORef
 
 import System.Timeout
@@ -116,14 +117,15 @@ rollbackEventPost t =
      rollbackOutputMessages (queueOutputMessages q) t
 
 -- | Return the expected event time.
-expectedEventTime :: Event DIO Double
+expectedEventTime :: Event DIO (Maybe Double)
 expectedEventTime =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      pq <- invokeEvent p $ R.readRef (queuePQ q)
      if PQ.queueNull pq
-       then return $ pointTime p
-       else invokeEvent p $ R.readRef (queueTime q)
+       then return Nothing
+       else do a <- invokeEvent p $ R.readRef (queueTime q)
+               return (Just a)
 
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
@@ -340,7 +342,7 @@ updateGlobalTime t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      t' <- invokeEvent p expectedEventTime
-     if t > t'
+     if (isJust t') && (t > fromJust t')
        then logDIO WARNING $
             "t = " ++ show t' ++
             ": Ignored the global time that is greater than the expected event time"
@@ -438,10 +440,14 @@ syncLocalTime m =
             else do ---
                     invokeEvent p logSyncLocalTime
                     ---
+                    t2 <- invokeEvent p expectedEventTime
+                    let t3 = case t2 of
+                          Nothing -> pointTime p
+                          Just t2 -> t2
                     sender   <- messageInboxId
                     receiver <- timeServerId
                     liftDistributedUnsafe $
-                      DP.send receiver (LocalTimeMessage sender t)
+                      DP.send receiver (LocalTimeMessage sender t3)
                     ch <- messageChannel
                     dt <- fmap dioTimeServerMessageTimeout dioParams
                     liftIOUnsafe $
