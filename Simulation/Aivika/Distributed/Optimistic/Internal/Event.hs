@@ -70,7 +70,7 @@ instance EventQueueing DIO where
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
        output <- newOutputMessageQueue
-       input <- newInputMessageQueue log (rollbackLog log) (rollbackOutputMessages output)
+       input <- newInputMessageQueue log rollbackEventPre rollbackEventPost
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueLog  = log,
@@ -95,6 +95,25 @@ instance EventQueueing DIO where
     let pq = queuePQ $ runEventQueue $ pointRun p
     in invokeEvent p $
        fmap PQ.queueCount $ R.readRef pq
+
+-- | The first stage of rolling the changes back.
+rollbackEventPre :: Double -> Event DIO ()
+rollbackEventPre t =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     rollbackLog (queueLog q) t
+     ---
+     logDIO DEBUG $
+       "Setting the queue time = " ++ show (pointTime p)
+     ---
+     invokeEvent p $ R.writeRef (queueTime q) (pointTime p)
+
+-- | The last stage of rolling the changes back.
+rollbackEventPost :: Double -> Event DIO ()
+rollbackEventPost t =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     rollbackOutputMessages (queueOutputMessages q) t
 
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
@@ -133,8 +152,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
        p1 <- invokeEvent p0 currentEventPoint
        ok <- invokeEvent p1 $ runTimeWarp processChannelMessages
        if not ok
-         then do p2 <- invokeEvent p1 currentEventPoint
-                 call q p p2
+         then call q p p1
          else do -- proceed with processing the events
                  f <- invokeEvent p1 $ fmap PQ.queueNull $ R.readRef pq
                  unless f $
@@ -142,18 +160,29 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
                       let t = queueTime q
                       t' <- invokeEvent p1 $ R.readRef t
                       when (t2 < t') $ 
-                        error "The time value is too small: processPendingEventsCore"
+                        -- error "The time value is too small: processPendingEventsCore"
+                        error $
+                        "The time value is too small (" ++ show t2 ++
+                        " < " ++ show t' ++ "): processPendingEventsCore"
                       when ((t2 < pointTime p) ||
                             (includingCurrentEvents && (t2 == pointTime p))) $
-                        do invokeEvent p1 $ R.writeRef t t2
-                           invokeEvent p1 $ R.modifyRef pq PQ.dequeue
-                           let sc = pointSpecs p
+                        do let sc = pointSpecs p
                                t0 = spcStartTime sc
                                dt = spcDT sc
                                n2 = fromIntegral $ floor ((t2 - t0) / dt)
                                p2 = p { pointTime = t2,
                                         pointIteration = n2,
                                         pointPhase = -1 }
+                           ---
+                           ps <- dioParams
+                           when (dioLoggingPriority ps <= DEBUG) $
+                             invokeEvent p2 $
+                             writeLog (queueLog q) $
+                             logDIO DEBUG $
+                             "Reverting the queue time " ++ show t2 ++ " --> " ++ show t'
+                           ---
+                           invokeEvent p2 $ R.writeRef t t2
+                           invokeEvent p2 $ R.modifyRef pq PQ.dequeue
                            c2 p2
                            call q p p2
 
@@ -235,11 +264,13 @@ processChannelMessages =
      f  <- liftIOUnsafe $ channelEmpty ch
      unless f $
        do xs <- liftIOUnsafe $ readChannel ch
-          forM_ xs $
-            invokeTimeWarp p . processChannelMessage
-     f2 <- invokeEvent p isEventOverflow
+          forM_ xs $ \x ->
+            do p' <- invokeEvent p currentEventPoint
+               invokeTimeWarp p' $ processChannelMessage x
+     p' <- invokeEvent p currentEventPoint
+     f2 <- invokeEvent p' isEventOverflow
      when f2 $
-       invokeTimeWarp p throttleMessageChannel
+       invokeTimeWarp p' throttleMessageChannel
 
 -- | Process the channel message.
 processChannelMessage :: LocalProcessMessage -> TimeWarp DIO ()
@@ -301,7 +332,7 @@ processChannelMessage x@TerminateLocalProcessMessage =
 logMessage :: LocalProcessMessage -> Event DIO ()
 logMessage (QueueMessage m) =
   Event $ \p ->
-  logDIO DEBUG $
+  logDIO INFO $
   "t = " ++ (show $ pointTime p) ++
   ": QueueMessage { " ++
   "sendTime = " ++ (show $ messageSendTime m) ++

@@ -46,9 +46,9 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 data InputMessageQueue =
   InputMessageQueue { inputMessageLog :: UndoableLog,
                       -- ^ the Redo/Undo log.
-                      inputMessageRollbackPre :: Double -> DIO (),
+                      inputMessageRollbackPre :: Double -> Event DIO (),
                       -- ^ Rollback the operations till the specified time before actual changes.
-                      inputMessageRollbackPost :: Double -> DIO (),
+                      inputMessageRollbackPost :: Double -> Event DIO (),
                       -- ^ Rollback the operations till the specified time after actual changes.
                       inputMessageSource :: SignalSource DIO Message,
                       -- ^ The message source.
@@ -71,9 +71,9 @@ data InputMessageQueueItem =
 -- | Create a new input message queue.
 newInputMessageQueue :: UndoableLog
                         -- ^ the Redo/Undo log
-                        -> (Double -> DIO ())
+                        -> (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time before actual changes
-                        -> (Double -> DIO ())
+                        -> (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time after actual changes
                         -> DIO InputMessageQueue
 newInputMessageQueue log rollbackPre rollbackPost =
@@ -122,7 +122,8 @@ enqueueMessage q m =
                      p' = pastPoint t p
                  liftIOUnsafe $
                    requireEmptyMessageActions q
-                 inputMessageRollbackPre q t'
+                 invokeEvent p' $
+                   inputMessageRollbackPre q t'
                  liftIOUnsafe $
                    writeIORef (inputMessageIndex q) i'
                  if f
@@ -131,7 +132,8 @@ enqueueMessage q m =
                            invokeEvent p' $ activateMessage q i
                  invokeEvent p' $
                    performMessageActions q
-                 inputMessageRollbackPost q t'
+                 invokeEvent p' $
+                   inputMessageRollbackPost q t'
          else if f
               then liftIOUnsafe $ annihilateMessage q i
               else do liftIOUnsafe $ insertMessage q m i

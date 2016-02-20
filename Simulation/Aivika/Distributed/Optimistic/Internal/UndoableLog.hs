@@ -27,6 +27,7 @@ import qualified Simulation.Aivika.DoubleLinkedList as DLL
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Internal.Types
 
+import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 
@@ -59,22 +60,28 @@ writeLog :: UndoableLog -> DIO () -> Event DIO ()
 writeLog log h =
   Event $ \p ->
   do let x = UndoableItem { itemTime = pointTime p, itemUndo = h }
+     ---
+     logDIO DEBUG $ "Writing the log at t = " ++ show (itemTime x)
+     ---
      liftIOUnsafe $
        do f <- DLL.listNull (logItems log)
           if f
             then DLL.listAddLast (logItems log) x
-            else do x <- DLL.listLast (logItems log)
-                    when (pointTime p < itemTime x) $
+            else do x0 <- DLL.listLast (logItems log)
+                    when (itemTime x < itemTime x0) $
                       error $
                       "The logging data are not sorted by time (" ++
-                      (show $ pointTime p) ++ " < " ++
-                      (show $ itemTime x) ++ "): writeLog"
+                      (show $ itemTime x) ++ " < " ++
+                      (show $ itemTime x0) ++ "): writeLog"
                     DLL.listAddLast (logItems log) x
 
 -- | Rollback the log till the specified time including that one.
 rollbackLog :: UndoableLog -> Double -> DIO ()
 rollbackLog log t =
   do liftIOUnsafe $ modifyIORef' (logRollbackVersionRef log) (+ 1)
+     ---
+     logDIO DEBUG $ "Rolling the log back to t = " ++ show t
+     ---
      loop
        where
          loop =

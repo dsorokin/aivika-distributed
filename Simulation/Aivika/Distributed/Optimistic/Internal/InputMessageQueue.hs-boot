@@ -30,8 +30,8 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
 data InputMessageQueue
 
 newInputMessageQueue :: UndoableLog
-                        -> (Double -> DIO ())
-                        -> (Double -> DIO ())
+                        -> (Double -> Event DIO ())
+                        -> (Double -> Event DIO ())
                         -> DIO InputMessageQueue
 
 inputMessageQueueIndex :: InputMessageQueue -> IO Int
