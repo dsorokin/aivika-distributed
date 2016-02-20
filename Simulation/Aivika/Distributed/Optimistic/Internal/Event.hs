@@ -343,7 +343,7 @@ updateGlobalTime t =
      if t > t'
        then logDIO WARNING $
             "t = " ++ show t' ++
-            ": Ignored the global time that is greater than the current event time"
+            ": Ignored the global time that is greater than the expected event time"
        else do liftIOUnsafe $
                  writeIORef (queueGlobalTime q) t
                invokeEvent p $
