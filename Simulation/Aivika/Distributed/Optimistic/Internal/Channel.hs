@@ -25,7 +25,7 @@ import Control.Monad
 
 -- | A channel.
 data Channel a =
-  Channel { channelList :: TVar ([a] -> [a]),
+  Channel { channelList :: TVar [a],
             channelListEmpty :: TVar Bool,
             channelListEmptyIO :: IORef Bool
           }
@@ -33,7 +33,7 @@ data Channel a =
 -- | Create a new channel.
 newChannel :: IO (Channel a)
 newChannel =
-  do list <- newTVarIO id
+  do list <- newTVarIO []
      listEmpty <- newTVarIO True
      listEmptyIO <- newIORef True
      return Channel { channelList = list,
@@ -52,20 +52,19 @@ readChannel ch =
      if empty
        then return []
        else do writeIORef (channelListEmptyIO ch) True
-               f <- atomically $
-                    do f <- readTVar (channelList ch)
-                       writeTVar (channelList ch) id
-                       writeTVar (channelListEmpty ch) True
-                       return f
-               return (f [])
+               xs <- atomically $
+                     do xs <- readTVar (channelList ch)
+                        writeTVar (channelList ch) []
+                        writeTVar (channelListEmpty ch) True
+                        return xs
+               return (reverse xs)
 
 -- | Write the value in the channel.
 writeChannel :: Channel a -> a -> IO ()
 writeChannel ch a =
   do atomically $
-       do f <- readTVar (channelList ch)
-          let f' xs = a : f xs
-          writeTVar (channelList ch) f'
+       do xs <- readTVar (channelList ch)
+          writeTVar (channelList ch) (a : xs)
           writeTVar (channelListEmpty ch) False
      writeIORef (channelListEmptyIO ch) False
 
