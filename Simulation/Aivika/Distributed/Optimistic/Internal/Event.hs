@@ -115,6 +115,16 @@ rollbackEventPost t =
   do let q = runEventQueue $ pointRun p
      rollbackOutputMessages (queueOutputMessages q) t
 
+-- | Return the expected event time.
+expectedEventTime :: Event DIO Double
+expectedEventTime =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     pq <- invokeEvent p $ R.readRef (queuePQ q)
+     if PQ.queueNull pq
+       then return $ pointTime p
+       else invokeEvent p $ R.readRef (queueTime q)
+
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
 {-# INLINE currentEventPoint #-}
@@ -329,7 +339,7 @@ updateGlobalTime :: Double -> Event DIO ()
 updateGlobalTime t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     t' <- invokeEvent p $ R.readRef (queueTime q)
+     t' <- invokeEvent p expectedEventTime
      if t > t'
        then logDIO WARNING $
             "t = " ++ show t' ++
