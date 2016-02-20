@@ -300,10 +300,8 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      case globalTime of
        Nothing -> return ()
        Just t0 ->
-         do liftIOUnsafe $
-              writeIORef (queueGlobalTime q) t0
-            invokeEvent p $
-              reduceEvents t0
+         invokeEvent p $
+         updateGlobalTime t0
      sender   <- messageInboxId
      receiver <- timeServerId
      liftDistributedUnsafe $
@@ -315,10 +313,8 @@ processChannelMessage x@(LocalTimeMessageResp globalTime) =
      invokeEvent p $
        logMessage x
      ---
-     liftIOUnsafe $
-       writeIORef (queueGlobalTime q) globalTime
      invokeEvent p $
-       reduceEvents globalTime
+       updateGlobalTime globalTime
 processChannelMessage x@TerminateLocalProcessMessage =
   TimeWarp $ \p ->
   do ---
@@ -327,6 +323,21 @@ processChannelMessage x@TerminateLocalProcessMessage =
      ---
      liftDistributedUnsafe $
        DP.terminate
+
+-- | Update the global time.
+updateGlobalTime :: Double -> Event DIO ()
+updateGlobalTime t =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- invokeEvent p $ R.readRef (queueTime q)
+     if t > t'
+       then logDIO WARNING $
+            "t = " ++ show t' ++
+            ": Ignored the global time that is greater than the current event time"
+       else do liftIOUnsafe $
+                 writeIORef (queueGlobalTime q) t
+               invokeEvent p $
+                 reduceEvents t
 
 -- | Log the message at the specified time.
 logMessage :: LocalProcessMessage -> Event DIO ()
