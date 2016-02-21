@@ -16,6 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic
         module Simulation.Aivika.Distributed.Optimistic.Generator,
         module Simulation.Aivika.Distributed.Optimistic.Message,
         module Simulation.Aivika.Distributed.Optimistic.QueueStrategy,
+        module Simulation.Aivika.Distributed.Optimistic.Priority,
         module Simulation.Aivika.Distributed.Optimistic.Ref.Base,
         module Simulation.Aivika.Distributed.Optimistic.TimeServer) where
 
@@ -23,5 +24,6 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 import Simulation.Aivika.Distributed.Optimistic.Generator
 import Simulation.Aivika.Distributed.Optimistic.Message
 import Simulation.Aivika.Distributed.Optimistic.QueueStrategy
+import Simulation.Aivika.Distributed.Optimistic.Priority
 import Simulation.Aivika.Distributed.Optimistic.Ref.Base
 import Simulation.Aivika.Distributed.Optimistic.TimeServer
