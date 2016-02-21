@@ -56,17 +56,17 @@ instance EventQueueing DIO where
                  -- ^ the undoable log of operations
                  queuePQ :: R.Ref (PQ.PriorityQueue (Point DIO -> DIO ())),
                  -- ^ the underlying priority queue
-                 queueBusy :: R.Ref Bool,
+                 queueBusy :: IORef Bool,
                  -- ^ whether the queue is currently processing events
-                 queueTime :: R.Ref Double,
+                 queueTime :: IORef Double,
                  -- ^ the actual time of the event queue
                  queueGlobalTime :: IORef Double
                  -- ^ the global time
                }
 
   newEventQueue specs =
-    do f <- R.newRef0 False
-       t <- R.newRef0 $ spcStartTime specs
+    do f <- liftIOUnsafe $ newIORef False
+       t <- liftIOUnsafe $ newIORef $ spcStartTime specs
        gt <- liftIOUnsafe $ newIORef $ spcStartTime specs
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
@@ -109,7 +109,7 @@ rollbackEventPre t =
      logDIO DEBUG $
        "Setting the queue time = " ++ show (pointTime p)
      ---
-     invokeEvent p $ R.writeRef (queueTime q) (pointTime p)
+     liftIOUnsafe $ writeIORef (queueTime q) (pointTime p)
 
 -- | The last stage of rolling the changes back.
 rollbackEventPost :: Double -> Event DIO ()
@@ -124,7 +124,7 @@ currentEventTime :: Event DIO Double
 currentEventTime =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     invokeEvent p $ R.readRef (queueTime q)
+     liftIOUnsafe $ readIORef (queueTime q)
 
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
@@ -132,7 +132,7 @@ currentEventPoint :: Event DIO (Point DIO)
 currentEventPoint =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     t' <- invokeEvent p $ R.readRef (queueTime q)
+     t' <- liftIOUnsafe $ readIORef (queueTime q)
      if t' == pointTime p
        then return p
        else let sc = pointSpecs p
@@ -149,13 +149,14 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
   r p =
     do let q = runEventQueue $ pointRun p
            f = queueBusy q
-       p0 <- invokeEvent p currentEventPoint
-       f' <- invokeEvent p0 $ R.readRef f
-       unless f' $
-         do invokeEvent p0 $ R.writeRef f True
-            call q p p0
-            p1 <- invokeEvent p0 currentEventPoint
-            invokeEvent p1 $ R.writeRef f False
+       f' <- liftIOUnsafe $ readIORef f
+       if f'
+         then error $
+              "Detected an event loop which may indicate to " ++
+              "a logical error in the model: processPendingEventsCore"
+         else do liftIOUnsafe $ writeIORef f True
+                 call q p p
+                 liftIOUnsafe $ writeIORef f False
   call q p p0 =
     do let pq = queuePQ q
            r  = pointRun p
@@ -169,7 +170,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
                  unless f $
                    do (t2, c2) <- invokeEvent p1 $ fmap PQ.queueFront $ R.readRef pq
                       let t = queueTime q
-                      t' <- invokeEvent p1 $ R.readRef t
+                      t' <- liftIOUnsafe $ readIORef t
                       when (t2 < t') $ 
                         -- error "The time value is too small: processPendingEventsCore"
                         error $
@@ -192,7 +193,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
                              logDIO DEBUG $
                              "Reverting the queue time " ++ show t2 ++ " --> " ++ show t'
                            ---
-                           invokeEvent p2 $ R.writeRef t t2
+                           liftIOUnsafe $ writeIORef t t2
                            invokeEvent p2 $ R.modifyRef pq PQ.dequeue
                            c2 p2
                            call q p p2
@@ -203,7 +204,7 @@ processPendingEvents includingCurrentEvents = Dynamics r where
   r p =
     do let q = runEventQueue $ pointRun p
            t = queueTime q
-       t' <- invokeEvent p $ R.readRef t
+       t' <- liftIOUnsafe $ readIORef t
        if pointTime p < t'
          then error $
               "The current time is less than " ++
