@@ -12,4 +12,6 @@
 module Simulation.Aivika.Distributed.Optimistic.Event
        (syncEvent) where
 
+import Simulation.Aivika.Trans
+
 import Simulation.Aivika.Distributed.Optimistic.Internal.Event
