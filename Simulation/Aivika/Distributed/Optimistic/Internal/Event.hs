@@ -15,8 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
-        syncEvent,
-        syncSimulation) where
+        syncEvent) where
 
 import Data.Maybe
 import Data.IORef
@@ -476,17 +475,6 @@ syncEvents processing =
      unless ok $
        invokeEvent p $
        syncEvents processing
-
--- | Synchronize the simulation in all nodes at the specified modeling time.
-syncSimulation :: Double -> Event DIO ()
-syncSimulation t =
-  enqueueEvent t $
-  Event $ \p ->
-  do ok <- invokeEvent p $
-           runTimeWarp $
-           syncLocalTime $
-           return ()
-     return ()
 
 -- | Synchronize the simulation in all nodes and call
 -- the specified computation at the given modeling time.
