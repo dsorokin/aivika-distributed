@@ -152,7 +152,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
        f' <- liftIOUnsafe $ readIORef f
        if f'
          then error $
-              "Detected an event loop which may indicate to " ++
+              "Detected an event loop, which may indicate to " ++
               "a logical error in the model: processPendingEventsCore"
          else do liftIOUnsafe $ writeIORef f True
                  call q p p
