@@ -88,7 +88,9 @@ instance EventQueueing DIO where
 
   runEventWith processing (Event e) =
     Dynamics $ \p ->
-    do invokeEvent p $ syncEvents processing
+    do p0 <- invokeEvent p currentEventPoint
+       invokeEvent p0 $ enqueueEvent (pointTime p) (return ())
+       invokeEvent p $ syncEvents processing
        e p
 
   eventQueueCount =
@@ -116,16 +118,13 @@ rollbackEventPost t =
   do let q = runEventQueue $ pointRun p
      rollbackOutputMessages (queueOutputMessages q) t
 
--- | Return the expected event time.
-expectedEventTime :: Event DIO (Maybe Double)
-expectedEventTime =
+-- | Return the current event time.
+currentEventTime :: Event DIO Double
+{-# INLINE currentEventTime #-}
+currentEventTime =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     pq <- invokeEvent p $ R.readRef (queuePQ q)
-     if PQ.queueNull pq
-       then return Nothing
-       else do a <- invokeEvent p $ R.readRef (queueTime q)
-               return (Just a)
+     invokeEvent p $ R.readRef (queueTime q)
 
 -- | Return the current event point.
 currentEventPoint :: Event DIO (Point DIO)
@@ -341,11 +340,11 @@ updateGlobalTime :: Double -> Event DIO ()
 updateGlobalTime t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     t' <- invokeEvent p expectedEventTime
-     if (isJust t') && (t > fromJust t')
+     t' <- invokeEvent p currentEventTime
+     if t > t'
        then logDIO WARNING $
             "t = " ++ show t' ++
-            ": Ignored the global time that is greater than the expected event time"
+            ": Ignored the global time that is greater than the current event time"
        else do liftIOUnsafe $
                  writeIORef (queueGlobalTime q) t
                invokeEvent p $
@@ -440,14 +439,11 @@ syncLocalTime m =
             else do ---
                     invokeEvent p logSyncLocalTime
                     ---
-                    t2 <- invokeEvent p expectedEventTime
-                    let t3 = case t2 of
-                          Nothing -> pointTime p
-                          Just t2 -> t2
+                    t2 <- invokeEvent p currentEventTime
                     sender   <- messageInboxId
                     receiver <- timeServerId
                     liftDistributedUnsafe $
-                      DP.send receiver (LocalTimeMessage sender t3)
+                      DP.send receiver (LocalTimeMessage sender t2)
                     ch <- messageChannel
                     dt <- fmap dioTimeServerMessageTimeout dioParams
                     liftIOUnsafe $
