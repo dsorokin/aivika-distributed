@@ -15,6 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
+        syncEvent,
         syncSimulation) where
 
 import Data.Maybe
@@ -486,3 +487,18 @@ syncSimulation t =
            syncLocalTime $
            return ()
      return ()
+
+-- | Synchronize the simulation in all nodes and call
+-- the specified computation at the given modeling time.
+--
+-- It is rather safe to put 'liftIO' in 'syncEvent'.
+syncEvent :: Double -> Event DIO () -> Event DIO ()
+syncEvent t h =
+  enqueueEvent t $
+  Event $ \p ->
+  do ok <- invokeEvent p $
+           runTimeWarp $
+           syncLocalTime $
+           return ()
+     when ok $
+       invokeEvent p h
