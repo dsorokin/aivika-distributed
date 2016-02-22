@@ -111,7 +111,7 @@ runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Pr
 runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams
+    ps = defaultDIOParams { dioLoggingPriority = NOTICE }
     m  = do runSimulation (slaveModel masterId) specs
             unregisterDIO
 
@@ -121,7 +121,7 @@ runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process Do
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams
+    ps = defaultDIOParams { dioLoggingPriority = NOTICE }
     m  = do a <- runSimulation (masterModel n) specs
             terminateDIO
             return a

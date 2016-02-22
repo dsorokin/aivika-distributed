@@ -67,11 +67,12 @@ model =
 runModel :: DP.ProcessId -> DP.Process ()
 runModel timeServerId =
   do DP.say "Started simulating..."
-     let m =
+     let ps = defaultDIOParams { dioLoggingPriority = NOTICE }
+         m =
            do a <- runSimulation model specs
               terminateDIO
               return a
-     (modelId, modelProcess) <- runDIO m defaultDIOParams timeServerId
+     (modelId, modelProcess) <- runDIO m ps timeServerId
      a <- modelProcess
      DP.say $ "The result is " ++ show a
 
