@@ -133,7 +133,7 @@ defaultDIOParams =
               dioInputMessageQueueIndexThreshold = 10000,
               dioOutputMessageQueueSizeThreshold = 10000,
               dioTimeServerMessageTimeout = 5000000,
-              dioAllowPrematureIO = True,
+              dioAllowPrematureIO = False,
               dioAllowProcessingOutdatedMessage = True
             }
 
