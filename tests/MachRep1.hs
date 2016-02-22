@@ -59,7 +59,7 @@ model =
               y <- liftDynamics time
               return $ x / (2 * y)
 
-     runEventInStopTime $
+     syncEventInStopTime $
        liftIO $ putStrLn "Test IO"
      
      runEventInStopTime upTimeProp
