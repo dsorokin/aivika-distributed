@@ -379,6 +379,17 @@ logSyncLocalTime =
        ", global t = " ++ (show t') ++
        ": synchronizing the local time..."
 
+-- | Log that the local time is sent to the time server.
+logSendLocalTime :: Event DIO ()
+logSendLocalTime =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     logDIO DEBUG $
+       "t = " ++ (show $ pointTime p) ++
+       ", global t = " ++ (show t') ++
+       ": sending the local time to the time server after delay..."
+
 -- | Log an evidence of the premature IO.
 logPrematureIO :: Event DIO ()
 logPrematureIO =
@@ -425,6 +436,19 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                         "Detected a premature IO action at t = " ++
                         (show $ pointTime p) ++ ": liftIO"
 
+-- | Send the local time to the time server.
+sendLocalTime :: Event DIO ()
+sendLocalTime =
+  Event $ \p ->
+  do ---
+     invokeEvent p logSendLocalTime
+     ---
+     t <- invokeEvent p currentEventTime
+     sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       DP.send receiver (LocalTimeMessage sender t)
+  
 -- | Synchronize the local time executing the specified computation.
 syncLocalTime :: Dynamics DIO () -> TimeWarp DIO ()
 syncLocalTime m =
@@ -440,18 +464,16 @@ syncLocalTime m =
             else do ---
                     invokeEvent p logSyncLocalTime
                     ---
-                    t2 <- invokeEvent p currentEventTime
-                    sender   <- messageInboxId
-                    receiver <- timeServerId
-                    liftDistributedUnsafe $
-                      DP.send receiver (LocalTimeMessage sender t2)
                     ch <- messageChannel
                     dt <- fmap dioTimeServerMessageTimeout dioParams
-                    liftIOUnsafe $
-                      timeout dt $ awaitChannel ch
+                    f  <- liftIOUnsafe $
+                          timeout dt $ awaitChannel ch
                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
                     if ok
-                      then invokeTimeWarp p $ syncLocalTime m
+                      then do case f of
+                                Just _  -> return ()
+                                Nothing -> invokeEvent p sendLocalTime
+                              invokeTimeWarp p $ syncLocalTime m
                       else return ()
 
 -- | Run the computation and return a flag indicating whether there was no rollback.
