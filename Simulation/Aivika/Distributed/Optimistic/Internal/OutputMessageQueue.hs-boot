@@ -32,6 +32,6 @@ outputMessageQueueSize :: OutputMessageQueue -> IO Int
 
 sendMessage :: OutputMessageQueue -> Message -> DIO ()
 
-rollbackOutputMessages :: OutputMessageQueue -> Double -> DIO ()
+rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
 
 reduceOutputMessages :: OutputMessageQueue -> Double -> IO ()

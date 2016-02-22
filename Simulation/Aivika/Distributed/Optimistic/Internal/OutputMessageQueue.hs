@@ -70,25 +70,27 @@ sendMessage q m =
      deliverMessage m
      liftIOUnsafe $ DLL.listAddLast (outputMessages q) m
 
--- | Rollback the messages till the specified time including that one.
-rollbackOutputMessages :: OutputMessageQueue -> Double -> DIO ()
-rollbackOutputMessages q t =
-  do ms <- liftIOUnsafe $ extractMessagesToRollback q t
+-- | Rollback the messages till the specified time either including that one or not.
+rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
+rollbackOutputMessages q t including =
+  do ms <- liftIOUnsafe $ extractMessagesToRollback q t including
      forM_ ms (deliverAntiMessage . antiMessage)
                  
 -- | Return the messages to roolback by the specified time.
-extractMessagesToRollback :: OutputMessageQueue -> Double -> IO [Message]
-extractMessagesToRollback q t = loop []
+extractMessagesToRollback :: OutputMessageQueue -> Double -> Bool -> IO [Message]
+extractMessagesToRollback q t including = loop []
   where
     loop acc =
       do f <- DLL.listNull (outputMessages q)
          if f
            then return acc
            else do m <- DLL.listLast (outputMessages q)
-                   if messageSendTime m < t
+                   if (not including) && (messageSendTime m == t)
                      then return acc
-                     else do DLL.listRemoveLast (outputMessages q)
-                             loop (m : acc)
+                     else if messageSendTime m < t
+                          then return acc
+                          else do DLL.listRemoveLast (outputMessages q)
+                                  loop (m : acc)
 
 -- | Reduce the output messages till the specified time.
 reduceOutputMessages :: OutputMessageQueue -> Double -> IO ()

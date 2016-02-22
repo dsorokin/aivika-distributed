@@ -100,18 +100,18 @@ instance EventQueueing DIO where
        fmap PQ.queueCount $ R.readRef pq
 
 -- | The first stage of rolling the changes back.
-rollbackEventPre :: Double -> Event DIO ()
-rollbackEventPre t =
+rollbackEventPre :: Double -> Bool -> Event DIO ()
+rollbackEventPre t including =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     rollbackLog (queueLog q) t
+     rollbackLog (queueLog q) t including
 
 -- | The post stage of rolling the changes back.
-rollbackEventPost :: Double -> Event DIO ()
-rollbackEventPost t =
+rollbackEventPost :: Double -> Bool -> Event DIO ()
+rollbackEventPost t including =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     rollbackOutputMessages (queueOutputMessages q) t
+     rollbackOutputMessages (queueOutputMessages q) t including
 
 -- | Rollback the event time.
 rollbackEventTime :: Double -> Event DIO ()

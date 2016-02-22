@@ -46,10 +46,10 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 data InputMessageQueue =
   InputMessageQueue { inputMessageLog :: UndoableLog,
                       -- ^ the Redo/Undo log.
-                      inputMessageRollbackPre :: Double -> Event DIO (),
-                      -- ^ Rollback the operations till the specified time before actual changes.
-                      inputMessageRollbackPost :: Double -> Event DIO (),
-                      -- ^ Rollback the operations till the specified time after actual changes.
+                      inputMessageRollbackPre :: Double -> Bool -> Event DIO (),
+                      -- ^ Rollback the operations till the specified time before actual changes either including the time or not.
+                      inputMessageRollbackPost :: Double -> Bool -> Event DIO (),
+                      -- ^ Rollback the operations till the specified time after actual changes either including the time or not.
                       inputMessageRollbackTime :: Double -> Event DIO (),
                       -- ^ Rollback the event time.
                       inputMessageSource :: SignalSource DIO Message,
@@ -73,10 +73,10 @@ data InputMessageQueueItem =
 -- | Create a new input message queue.
 newInputMessageQueue :: UndoableLog
                         -- ^ the Redo/Undo log
-                        -> (Double -> Event DIO ())
-                        -- ^ rollback operations till the specified time before actual changes
-                        -> (Double -> Event DIO ())
-                        -- ^ rollback operations till the specified time after actual changes
+                        -> (Double -> Bool -> Event DIO ())
+                        -- ^ rollback operations till the specified time before actual changes either including the time or not
+                        -> (Double -> Bool -> Event DIO ())
+                        -- ^ rollback operations till the specified time after actual changes either including the time or not
                         -> (Double -> Event DIO ())
                         -- ^ rollback the event time
                         -> DIO InputMessageQueue
@@ -122,7 +122,7 @@ enqueueMessage q m =
                  let t' = messageReceiveTime m
                      p' = pastPoint t p
                  invokeEvent p' $
-                   rollbackInputMessages q t' $
+                   rollbackInputMessages q t' True $
                    Event $ \p' ->
                    do liftIOUnsafe $
                         writeIORef (inputMessageIndex q) i'
@@ -137,9 +137,9 @@ enqueueMessage q m =
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
 
--- | Rollback the input messages till the specified time and apply the given computation.
-rollbackInputMessages :: InputMessageQueue -> Double -> Event DIO () -> Event DIO ()
-rollbackInputMessages q t m =
+-- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
+rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
+rollbackInputMessages q t including m =
   Event $ \p ->
   do ---
      logDIO NOTICE $
@@ -148,12 +148,12 @@ rollbackInputMessages q t m =
      liftIOUnsafe $
        requireEmptyMessageActions q
      invokeEvent p $
-       inputMessageRollbackPre q t
+       inputMessageRollbackPre q t including
      invokeEvent p m
      invokeEvent p $
        performMessageActions q
      invokeEvent p $
-       inputMessageRollbackPost q t
+       inputMessageRollbackPost q t including
 
 -- | Return the point in the past.
 pastPoint :: Double -> Point DIO -> Point DIO
