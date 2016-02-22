@@ -83,7 +83,8 @@ slaveModel masterId =
 
      runProcessInStartTime machine
 
-     syncEventInStopTime $ return ()
+     syncEventInStopTime $
+       liftIO $ putStrLn "The sub-model finished"
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO Double
@@ -104,9 +105,6 @@ masterModel n =
               y <- liftDynamics time
               return $ x / (fromIntegral n * y)
 
-     runEventInStopTime $
-       liftIO $ putStrLn "Test IO"
-     
      runEventInStopTime upTimeProp
 
 runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Process ())
