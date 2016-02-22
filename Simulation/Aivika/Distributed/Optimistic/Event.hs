@@ -19,8 +19,10 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Event
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Synchronize the simulation in all nodes and call
--- the specified computation in the stop time. The modeling
--- time must be initial when calling this function.
+-- the specified computation in the stop time.
+--
+-- The modeling time must be initial when calling this function.
+-- Also this call must be last in your part of the model.
 --
 -- It is rather safe to call 'liftIO' within this function.
 syncEventInStopTime :: Event DIO () -> Simulation DIO ()
@@ -28,3 +30,5 @@ syncEventInStopTime h =
   do t0 <- liftParameter stoptime
      runEventInStartTime $
        syncEvent t0 h
+     runEventInStopTime $
+       return ()
