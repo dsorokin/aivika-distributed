@@ -83,8 +83,7 @@ slaveModel masterId =
 
      runProcessInStartTime machine
 
-     runEventInStopTime $
-       unregisterSimulation
+     syncEventInStopTime $ return ()
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO Double
@@ -115,7 +114,8 @@ runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
     ps = defaultDIOParams
-    m  = runSimulation (slaveModel masterId) specs
+    m  = do runSimulation (slaveModel masterId) specs
+            unregisterDIO
 
 -- remotable ['runSlaveModel, 'timeServer]
 
@@ -125,7 +125,7 @@ runMasterModel timeServerId n =
   where
     ps = defaultDIOParams
     m  = do a <- runSimulation (masterModel n) specs
-            terminateSimulation
+            terminateDIO
             return a
 
 master = \backend nodes ->

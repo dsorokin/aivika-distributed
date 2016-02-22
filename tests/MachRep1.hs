@@ -69,12 +69,11 @@ runModel timeServerId =
   do DP.say "Started simulating..."
      let m =
            do a <- runSimulation model specs
-              terminateSimulation
-              return $
-                DP.say $
-                "The result is " ++ show a
+              terminateDIO
+              return a
      (modelId, modelProcess) <- runDIO m defaultDIOParams timeServerId
-     join modelProcess
+     a <- modelProcess
+     DP.say $ "The result is " ++ show a
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
