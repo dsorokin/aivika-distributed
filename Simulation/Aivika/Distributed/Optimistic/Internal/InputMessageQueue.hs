@@ -120,6 +120,7 @@ enqueueMessage q m =
          do -- found an anti-message at the specified index
             i' <- liftIOUnsafe $ leftMessageIndex q m i
             let p' = pastPoint t p
+            logRollbackInputMessages t0 t True
             invokeEvent p' $
               rollbackInputMessages q t True $
               Event $ \p' ->
@@ -131,6 +132,7 @@ enqueueMessage q m =
        Just False | (i < i0 || t < t0) ->
          do -- insert the message at the specified right index
             let p' = pastPoint t p
+            logRollbackInputMessages t0 t False
             invokeEvent p' $
               rollbackInputMessages q t False $
               Event $ \p' ->
@@ -146,16 +148,18 @@ enqueueMessage q m =
          do liftIOUnsafe $ insertMessage q m i
             invokeEvent p $ activateMessage q i
 
+-- | Log the rollback.
+logRollbackInputMessages :: Double -> Double -> Bool -> DIO ()
+logRollbackInputMessages t0 t including =
+  do logDIO NOTICE $
+       "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t) ++
+       (if not including then " not including" else "")
+
 -- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
 rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
 rollbackInputMessages q t including m =
   Event $ \p ->
-  do ---
-     logDIO NOTICE $
-       "Rollback at t = " ++ (show $ pointTime p) ++ " --> " ++ (show t) ++
-       (if not including then " not including" else "")
-     ---
-     liftIOUnsafe $
+  do liftIOUnsafe $
        requireEmptyMessageActions q
      invokeEvent p $
        inputMessageRollbackPre q t including
