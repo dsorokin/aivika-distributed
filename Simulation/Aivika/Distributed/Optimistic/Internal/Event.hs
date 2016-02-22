@@ -385,6 +385,17 @@ logSyncLocalTime =
        ", global t = " ++ (show t') ++
        ": synchronizing the local time..."
 
+-- | Log that the local time is to be synchronized in ring 0.
+logSyncLocalTime0 :: Event DIO ()
+logSyncLocalTime0 =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     logDIO DEBUG $
+       "t = " ++ (show $ pointTime p) ++
+       ", global t = " ++ (show t') ++
+       ": synchronizing the local time in ring 0..."
+
 -- | Log that the local time is sent to the time server.
 logSendLocalTime :: Event DIO ()
 logSendLocalTime =
@@ -462,13 +473,37 @@ syncLocalTime m =
   do let q = runEventQueue $ pointRun p
          t = pointTime p
      invokeDynamics p m
+     ---
+     invokeEvent p logSyncLocalTime
+     ---
+     ch <- messageChannel
+     dt <- fmap dioTimeServerMessageTimeout dioParams
+     f  <- liftIOUnsafe $
+           timeout dt $ awaitChannel ch
+     ok <- invokeEvent p $ runTimeWarp processChannelMessages
+     if ok
+       then do case f of
+                 Just _  ->
+                   invokeTimeWarp p $ syncLocalTime m
+                 Nothing ->
+                   do invokeEvent p sendLocalTime
+                      invokeTimeWarp p $ syncLocalTime0 m
+       else return ()
+  
+-- | Synchronize the local time executing the specified computation in ring 0.
+syncLocalTime0 :: Dynamics DIO () -> TimeWarp DIO ()
+syncLocalTime0 m =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+         t = pointTime p
+     invokeDynamics p m
      t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      if t' > t
-       then error "Inconsistent time: syncLocalTime"
+       then error "Inconsistent time: syncLocalTime0"
        else if t' == pointTime p
             then return ()
             else do ---
-                    invokeEvent p logSyncLocalTime
+                    invokeEvent p logSyncLocalTime0
                     ---
                     ch <- messageChannel
                     dt <- fmap dioTimeServerMessageTimeout dioParams
@@ -477,9 +512,11 @@ syncLocalTime m =
                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
                     if ok
                       then do case f of
-                                Just _  -> return ()
-                                Nothing -> invokeEvent p sendLocalTime
-                              invokeTimeWarp p $ syncLocalTime m
+                                Just _  ->
+                                  invokeTimeWarp p $ syncLocalTime m
+                                Nothing ->
+                                  do invokeEvent p sendLocalTime
+                                     invokeTimeWarp p $ syncLocalTime0 m
                       else return ()
 
 -- | Run the computation and return a flag indicating whether there was no rollback.
