@@ -75,9 +75,9 @@ writeLog log h =
                       (show $ itemTime x0) ++ "): writeLog"
                     DLL.listAddLast (logItems log) x
 
--- | Rollback the log till the specified time including that one.
-rollbackLog :: UndoableLog -> Double -> DIO ()
-rollbackLog log t =
+-- | Rollback the log till the specified time either including that one or not.
+rollbackLog :: UndoableLog -> Double -> Bool -> DIO ()
+rollbackLog log t including =
   do liftIOUnsafe $ modifyIORef' (logRollbackVersionRef log) (+ 1)
      ---
      logDIO DEBUG $ "Rolling the log back to t = " ++ show t
@@ -88,7 +88,7 @@ rollbackLog log t =
            do f <- liftIOUnsafe $ DLL.listNull (logItems log)
               unless f $
                 do x <- liftIOUnsafe $ DLL.listLast (logItems log)
-                   when (t <= itemTime x) $
+                   when ((t < itemTime x) || (including && t == itemTime x)) $
                      do liftIOUnsafe $ DLL.listRemoveLast (logItems log)
                         itemUndo x
                         loop
