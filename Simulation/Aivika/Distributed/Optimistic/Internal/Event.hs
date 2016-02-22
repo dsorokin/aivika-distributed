@@ -473,22 +473,27 @@ syncLocalTime m =
   do let q = runEventQueue $ pointRun p
          t = pointTime p
      invokeDynamics p m
-     ---
-     invokeEvent p logSyncLocalTime
-     ---
-     ch <- messageChannel
-     dt <- fmap dioTimeServerMessageTimeout dioParams
-     f  <- liftIOUnsafe $
-           timeout dt $ awaitChannel ch
-     ok <- invokeEvent p $ runTimeWarp processChannelMessages
-     if ok
-       then do case f of
-                 Just _  ->
-                   invokeTimeWarp p $ syncLocalTime m
-                 Nothing ->
-                   do invokeEvent p sendLocalTime
-                      invokeTimeWarp p $ syncLocalTime0 m
-       else return ()
+     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     if t' > t
+       then error "Inconsistent time: syncLocalTime"
+       else if t == spcStartTime (pointSpecs p)
+            then return ()
+            else do ---
+                    invokeEvent p logSyncLocalTime
+                    ---
+                    ch <- messageChannel
+                    dt <- fmap dioTimeServerMessageTimeout dioParams
+                    f  <- liftIOUnsafe $
+                          timeout dt $ awaitChannel ch
+                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
+                    if ok
+                      then do case f of
+                                Just _  ->
+                                  invokeTimeWarp p $ syncLocalTime m
+                                Nothing ->
+                                  do invokeEvent p sendLocalTime
+                                     invokeTimeWarp p $ syncLocalTime0 m
+                      else return ()
   
 -- | Synchronize the local time executing the specified computation in ring 0.
 syncLocalTime0 :: Dynamics DIO () -> TimeWarp DIO ()
