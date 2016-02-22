@@ -20,8 +20,8 @@ module Simulation.Aivika.Distributed.Optimistic.DIO
         messageInboxId,
         timeServerId,
         logDIO,
-        terminateSimulation,
-        unregisterSimulation) where
+        terminateDIO,
+        unregisterDIO) where
 
 import Control.Monad
 import Control.Monad.Trans

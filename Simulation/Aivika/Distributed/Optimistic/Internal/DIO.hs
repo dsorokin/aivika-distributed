@@ -17,8 +17,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         invokeDIO,
         runDIO,
         defaultDIOParams,
-        terminateSimulation,
-        unregisterSimulation,
+        terminateDIO,
+        unregisterDIO,
         dioParams,
         messageChannel,
         messageInboxId,
@@ -155,8 +155,8 @@ timeServerId = DIO $ return . dioTimeServerId
 
 -- | Terminate the simulation including the processes in
 -- all nodes connected to the time server.
-terminateSimulation :: DIO ()
-terminateSimulation =
+terminateDIO :: DIO ()
+terminateDIO =
   do logDIO INFO "Terminating the simulation..."
      sender   <- messageInboxId
      receiver <- timeServerId
@@ -166,9 +166,8 @@ terminateSimulation =
 -- | Unregister the simulation process from the time server
 -- without affecting the processes in other nodes connected to
 -- the corresponding time server.
-unregisterSimulation :: Event DIO ()
-unregisterSimulation =
-  Event $ \p ->
+unregisterDIO :: DIO ()
+unregisterDIO =
   do logDIO INFO "Unregistering the simulation process..."
      sender   <- messageInboxId
      receiver <- timeServerId
