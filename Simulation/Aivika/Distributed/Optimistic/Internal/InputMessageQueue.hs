@@ -50,6 +50,8 @@ data InputMessageQueue =
                       -- ^ Rollback the operations till the specified time before actual changes.
                       inputMessageRollbackPost :: Double -> Event DIO (),
                       -- ^ Rollback the operations till the specified time after actual changes.
+                      inputMessageRollbackTime :: Double -> Event DIO (),
+                      -- ^ Rollback the event time.
                       inputMessageSource :: SignalSource DIO Message,
                       -- ^ The message source.
                       inputMessages :: Vector InputMessageQueueItem,
@@ -75,8 +77,10 @@ newInputMessageQueue :: UndoableLog
                         -- ^ rollback operations till the specified time before actual changes
                         -> (Double -> Event DIO ())
                         -- ^ rollback operations till the specified time after actual changes
+                        -> (Double -> Event DIO ())
+                        -- ^ rollback the event time
                         -> DIO InputMessageQueue
-newInputMessageQueue log rollbackPre rollbackPost =
+newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
   do ms <- liftIOUnsafe newVector
      r1 <- liftIOUnsafe $ newIORef 0
      r2 <- liftIOUnsafe $ newIORef []
@@ -84,6 +88,7 @@ newInputMessageQueue log rollbackPre rollbackPost =
      return InputMessageQueue { inputMessageLog = log,
                                 inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
+                                inputMessageRollbackTime = rollbackTime,
                                 inputMessageSource = s,
                                 inputMessages = ms,
                                 inputMessageIndex = r1,
@@ -113,31 +118,42 @@ enqueueMessage q m =
        Nothing -> return ()
        Just f  ->
          if i < i0 || t < t0
-         then do ---
-                 logDIO NOTICE $
-                   "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t)
-                 ---
-                 i' <- liftIOUnsafe $ leftMessageIndex q m i
+         then do i' <- liftIOUnsafe $ leftMessageIndex q m i
                  let t' = messageReceiveTime m
                      p' = pastPoint t p
-                 liftIOUnsafe $
-                   requireEmptyMessageActions q
                  invokeEvent p' $
-                   inputMessageRollbackPre q t'
-                 liftIOUnsafe $
-                   writeIORef (inputMessageIndex q) i'
-                 if f
-                   then liftIOUnsafe $ annihilateMessage q i
-                   else do liftIOUnsafe $ insertMessage q m i
-                           invokeEvent p' $ activateMessage q i
+                   rollbackInputMessages q t' $
+                   Event $ \p' ->
+                   do liftIOUnsafe $
+                        writeIORef (inputMessageIndex q) i'
+                      if f
+                        then liftIOUnsafe $ annihilateMessage q i
+                        else do liftIOUnsafe $ insertMessage q m i
+                                invokeEvent p' $ activateMessage q i
                  invokeEvent p' $
-                   performMessageActions q
-                 invokeEvent p' $
-                   inputMessageRollbackPost q t'
+                   inputMessageRollbackTime q t'
          else if f
               then liftIOUnsafe $ annihilateMessage q i
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
+
+-- | Rollback the input messages till the specified time and apply the given computation.
+rollbackInputMessages :: InputMessageQueue -> Double -> Event DIO () -> Event DIO ()
+rollbackInputMessages q t m =
+  Event $ \p ->
+  do ---
+     logDIO NOTICE $
+       "Rollback at t = " ++ (show $ pointTime p) ++ " --> " ++ (show t)
+     ---
+     liftIOUnsafe $
+       requireEmptyMessageActions q
+     invokeEvent p $
+       inputMessageRollbackPre q t
+     invokeEvent p m
+     invokeEvent p $
+       performMessageActions q
+     invokeEvent p $
+       inputMessageRollbackPost q t
 
 -- | Return the point in the past.
 pastPoint :: Double -> Point DIO -> Point DIO

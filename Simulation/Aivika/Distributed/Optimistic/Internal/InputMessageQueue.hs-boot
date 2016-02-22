@@ -32,6 +32,7 @@ data InputMessageQueue
 newInputMessageQueue :: UndoableLog
                         -> (Double -> Event DIO ())
                         -> (Double -> Event DIO ())
+                        -> (Double -> Event DIO ())
                         -> DIO InputMessageQueue
 
 inputMessageQueueIndex :: InputMessageQueue -> IO Int

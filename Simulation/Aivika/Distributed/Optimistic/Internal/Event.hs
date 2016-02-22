@@ -71,7 +71,7 @@ instance EventQueueing DIO where
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
        output <- newOutputMessageQueue
-       input <- newInputMessageQueue log rollbackEventPre rollbackEventPost
+       input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueLog  = log,
@@ -105,18 +105,24 @@ rollbackEventPre t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      rollbackLog (queueLog q) t
-     ---
-     logDIO DEBUG $
-       "Setting the queue time = " ++ show (pointTime p)
-     ---
-     liftIOUnsafe $ writeIORef (queueTime q) (pointTime p)
 
--- | The last stage of rolling the changes back.
+-- | The post stage of rolling the changes back.
 rollbackEventPost :: Double -> Event DIO ()
 rollbackEventPost t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      rollbackOutputMessages (queueOutputMessages q) t
+
+-- | Rollback the event time.
+rollbackEventTime :: Double -> Event DIO ()
+rollbackEventTime t =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     logDIO DEBUG $
+       "Setting the queue time = " ++ show (pointTime p)
+     ---
+     liftIOUnsafe $ writeIORef (queueTime q) (pointTime p)
 
 -- | Return the current event time.
 currentEventTime :: Event DIO Double
