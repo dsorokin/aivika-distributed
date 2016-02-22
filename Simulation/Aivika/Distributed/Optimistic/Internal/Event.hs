@@ -479,7 +479,7 @@ syncEvents processing =
 -- | Synchronize the simulation in all nodes and call
 -- the specified computation at the given modeling time.
 --
--- It is rather safe to put 'liftIO' in 'syncEvent'.
+-- It is rather safe to put 'liftIO' in this function.
 syncEvent :: Double -> Event DIO () -> Event DIO ()
 syncEvent t h =
   enqueueEvent t $

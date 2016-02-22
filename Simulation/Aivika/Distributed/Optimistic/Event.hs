@@ -10,8 +10,21 @@
 -- This module defines additional functions for the 'Event' computation.
 --
 module Simulation.Aivika.Distributed.Optimistic.Event
-       (syncEvent) where
+       (syncEvent,
+        syncEventInStopTime) where
 
 import Simulation.Aivika.Trans
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Event
+import Simulation.Aivika.Distributed.Optimistic.DIO
+
+-- | Synchronize the simulation in all nodes and call
+-- the specified computation in the stop time. The modeling
+-- time must be initial when calling this function.
+--
+-- It is rather safe to call 'liftIO' in this function.
+syncEventInStopTime :: Event DIO () -> Simulation DIO ()
+syncEventInStopTime h =
+  do t0 <- liftParameter stoptime
+     runEventInStartTime $
+       syncEvent t0 h
