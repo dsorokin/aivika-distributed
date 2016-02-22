@@ -22,7 +22,7 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 -- the specified computation in the stop time. The modeling
 -- time must be initial when calling this function.
 --
--- It is rather safe to call 'liftIO' in this function.
+-- It is rather safe to call 'liftIO' within this function.
 syncEventInStopTime :: Event DIO () -> Simulation DIO ()
 syncEventInStopTime h =
   do t0 <- liftParameter stoptime
