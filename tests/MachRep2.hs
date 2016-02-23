@@ -161,21 +161,19 @@ masterModel count =
      runEventInStartTime $
        handleSignal messageReceived $ \(RequestRepairPerson senderId) ->
        runProcess $
-       do n <- liftEvent $ resourceCount repairPerson
-          if n <= 0
-            then liftEvent retryEvent
-            else do requestResource repairPerson
-                    t <- liftDynamics time
-                    liftEvent $
-                      enqueueMessage senderId (t + delta) (RequestRepairPersonResp inboxId)
+       do requestResource repairPerson
+          t <- liftDynamics time
+          liftEvent $
+            enqueueMessage senderId (t + delta) (RequestRepairPersonResp inboxId)
 
      runEventInStartTime $
        handleSignal messageReceived $ \(ReleaseRepairPerson senderId) ->
        do n <- resourceCount repairPerson
           if n >= maxRepairPersonCount
-            then liftEvent retryEvent
-            else do releaseResourceWithinEvent repairPerson
-                    sendMessage senderId (ReleaseRepairPersonResp inboxId)
+            then liftEvent retryEvent  -- N.B. retry the computation as the order is incorrect!
+            else do t <- liftDynamics time
+                    releaseResourceWithinEvent repairPerson
+                    enqueueMessage senderId (t + delta) (ReleaseRepairPersonResp inboxId)
           
      let upTimeProp =
            do x <- readRef totalUpTime
