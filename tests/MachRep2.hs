@@ -47,6 +47,9 @@ specs = Specs { spcStartTime = 0.0,
                 spcMethod = RungeKutta4,
                 spcGeneratorType = SimpleGenerator }
 
+-- | The time shift when replying the messages.
+delta = 0.01
+
 data TotalUpTimeChange = TotalUpTimeChange (DP.ProcessId, Double) deriving (Eq, Ord, Show, Typeable, Generic)
 data TotalUpTimeChangeResp = TotalUpTimeChangeResp DP.ProcessId deriving (Eq, Ord, Show, Typeable, Generic)
 
@@ -87,33 +90,34 @@ instance Binary ReleaseRepairPersonResp
 slaveModel :: DP.ProcessId -> Simulation DIO ()
 slaveModel masterId =
   do inboxId <- liftComp messageInboxId
-  
+
      let machine =
-           do upTime <-
-                randomExponentialProcess meanUpTime
-              liftEvent $
-                sendMessage masterId (TotalUpTimeChange (inboxId, upTime))
+           do t <- liftDynamics time
+              upTime <-
+                liftParameter $ randomExponential meanUpTime
+              enqueueMessage masterId (t + delta + upTime) (TotalUpTimeChange (inboxId, upTime))
+              enqueueMessage masterId (t + delta + upTime) (NRepChange (inboxId, 1))
+              enqueueMessage masterId (t + delta + upTime) (RepairPersonCount inboxId)
 
-              liftEvent $
-                do sendMessage masterId (NRepChange (inboxId, 1))
-                   sendMessage masterId (RepairPersonCount inboxId)
-                   
-              RepairPersonCountResp (senderId, n) <- processAwait messageReceived
-              when (n == 1) $
-                liftEvent $
-                sendMessage masterId (NImmedRepChange (inboxId, 1))
+     runEventInStartTime $
+       handleSignal messageReceived $ \(RepairPersonCountResp (senderId, n)) ->
+       do t <- liftDynamics time
+          when (n == 1) $
+            enqueueMessage masterId (t + delta) (NImmedRepChange (inboxId, 1))
+          enqueueMessage masterId (t + delta) (RequestRepairPerson inboxId)
 
-              liftEvent $
-                sendMessage masterId (RequestRepairPerson inboxId)
-              RequestRepairPersonResp senderId <- processAwait messageReceived
-              repairTime <-
-                randomExponentialProcess meanRepairTime
-              liftEvent $
-                sendMessage masterId (ReleaseRepairPerson inboxId)
+     runEventInStartTime $
+       handleSignal messageReceived $ \(RequestRepairPersonResp senderId) ->
+       do t <- liftDynamics time
+          repairTime <-
+            liftParameter $ randomExponential meanRepairTime
+          enqueueMessage masterId (t + delta + repairTime) (ReleaseRepairPerson inboxId)
 
-              machine
-
-     runProcessInStartTime machine
+     runEventInStartTime $
+       handleSignal messageReceived $ \(ReleaseRepairPersonResp senderId) ->
+       machine
+  
+     runEventInStartTime machine
 
      syncEventInStopTime $
        liftIO $ putStrLn "The sub-model finished"
@@ -125,49 +129,53 @@ masterModel count =
      nRep <- newRef 0
      nImmedRep <- newRef 0
 
-     repairPerson <- newFCFSResource 1
+     let maxRepairPersonCount = 1
+     repairPerson <- newFCFSResource maxRepairPersonCount
 
      inboxId <- liftComp messageInboxId
 
-     let totalUpTimeChanged = messageReceived :: Signal DIO TotalUpTimeChange
-         nRepChanged = messageReceived :: Signal DIO NRepChange
-         nImmedRepChanged = messageReceived :: Signal DIO NImmedRepChange
-         
-         repairPersonCounting = messageReceived :: Signal DIO RepairPersonCount
-         repairPersonRequested = messageReceived :: Signal DIO RequestRepairPerson
-         repairPersonReleased = messageReceived :: Signal DIO ReleaseRepairPerson
-
      runEventInStartTime $
-       handleSignal totalUpTimeChanged $ \(TotalUpTimeChange (senderId, x)) ->
+       handleSignal messageReceived $ \(TotalUpTimeChange (senderId, x)) ->
        do modifyRef totalUpTime (+ x)
-          sendMessage senderId (TotalUpTimeChangeResp inboxId)
+          t <- liftDynamics time
+          enqueueMessage senderId (t + delta) (TotalUpTimeChangeResp inboxId)
 
      runEventInStartTime $
-       handleSignal nRepChanged $ \(NRepChange (senderId, x)) ->
+       handleSignal messageReceived $ \(NRepChange (senderId, x)) ->
        do modifyRef nRep (+ x)
-          sendMessage senderId (NRepChangeResp inboxId)
+          t <- liftDynamics time
+          enqueueMessage senderId (t + delta) (NRepChangeResp inboxId)
 
      runEventInStartTime $
-       handleSignal nImmedRepChanged $ \(NImmedRepChange (senderId, x)) ->
+       handleSignal messageReceived $ \(NImmedRepChange (senderId, x)) ->
        do modifyRef nImmedRep (+ x)
-          sendMessage senderId (NImmedRepChangeResp inboxId)
+          t <- liftDynamics time
+          enqueueMessage senderId (t + delta) (NImmedRepChangeResp inboxId)
 
      runEventInStartTime $
-       handleSignal repairPersonCounting $ \(RepairPersonCount senderId) ->
+       handleSignal messageReceived $ \(RepairPersonCount senderId) ->
        do n <- resourceCount repairPerson
-          sendMessage senderId (RepairPersonCountResp (inboxId, n))
+          t <- liftDynamics time
+          enqueueMessage senderId (t + delta) (RepairPersonCountResp (inboxId, n))
 
      runEventInStartTime $
-       handleSignal repairPersonRequested $ \(RequestRepairPerson senderId) ->
+       handleSignal messageReceived $ \(RequestRepairPerson senderId) ->
        runProcess $
-       do requestResource repairPerson
-          liftEvent $
-            sendMessage senderId (RequestRepairPersonResp inboxId)
+       do n <- liftEvent $ resourceCount repairPerson
+          if n <= 0
+            then liftComp $ logDIO NOTICE "*** The resource is exceeded ***"
+            else do requestResource repairPerson
+                    t <- liftDynamics time
+                    liftEvent $
+                      enqueueMessage senderId (t + delta) (RequestRepairPersonResp inboxId)
 
      runEventInStartTime $
-       handleSignal repairPersonReleased $ \(ReleaseRepairPerson senderId) ->
-       do releaseResourceWithinEvent repairPerson
-          sendMessage senderId (ReleaseRepairPersonResp inboxId)
+       handleSignal messageReceived $ \(ReleaseRepairPerson senderId) ->
+       do n <- resourceCount repairPerson
+          if n >= maxRepairPersonCount
+            then liftComp $ logDIO NOTICE "*** The resource is maximal ***"
+            else do releaseResourceWithinEvent repairPerson
+                    sendMessage senderId (ReleaseRepairPersonResp inboxId)
           
      let upTimeProp =
            do x <- readRef totalUpTime
