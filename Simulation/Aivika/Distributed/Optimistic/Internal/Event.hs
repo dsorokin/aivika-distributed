@@ -586,7 +586,7 @@ instance Exception RetryEvent where
 
 -- | Retry the 'Event' computation waiting for arriving other messages.
 retryEvent :: Event DIO a
-retryEvent = throw RetryEvent
+retryEvent = throwEvent RetryEvent
 
 -- | Handle the 'Event' retry.
 handleEventRetry :: Event DIO ()
