@@ -42,7 +42,7 @@ meanUpTime = 1.0
 meanRepairTime = 0.5
 
 specs = Specs { spcStartTime = 0.0,
-                spcStopTime = 1000.0,
+                spcStopTime = 100.0,
                 spcDT = 1.0,
                 spcMethod = RungeKutta4,
                 spcGeneratorType = SimpleGenerator }
@@ -163,7 +163,7 @@ masterModel count =
        runProcess $
        do n <- liftEvent $ resourceCount repairPerson
           if n <= 0
-            then liftComp $ logDIO NOTICE "*** The resource is exceeded ***"
+            then liftEvent retryEvent
             else do requestResource repairPerson
                     t <- liftDynamics time
                     liftEvent $
@@ -173,7 +173,7 @@ masterModel count =
        handleSignal messageReceived $ \(ReleaseRepairPerson senderId) ->
        do n <- resourceCount repairPerson
           if n >= maxRepairPersonCount
-            then liftComp $ logDIO NOTICE "*** The resource is maximal ***"
+            then liftEvent retryEvent
             else do releaseResourceWithinEvent repairPerson
                     sendMessage senderId (ReleaseRepairPersonResp inboxId)
           
