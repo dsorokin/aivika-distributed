@@ -123,6 +123,14 @@ rollbackEventTime t =
        "Setting the queue time = " ++ show (pointTime p)
      ---
      liftIOUnsafe $ writeIORef (queueTime q) (pointTime p)
+     t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     when (t0 > t) $
+       do ---
+          logDIO DEBUG $
+            "Setting the global time = " ++ show (pointTime p)
+          ---
+          liftIOUnsafe $ writeIORef (queueGlobalTime q) (pointTime p)
+          invokeEvent p sendLocalTime
 
 -- | Return the current event time.
 currentEventTime :: Event DIO Double
