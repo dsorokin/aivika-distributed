@@ -16,6 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
+        rollbackInputMessages,
         reduceInputMessages) where
 
 import Simulation.Aivika.Trans.Simulation

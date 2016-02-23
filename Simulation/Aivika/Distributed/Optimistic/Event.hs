@@ -10,7 +10,8 @@
 -- This module defines additional functions for the 'Event' computation.
 --
 module Simulation.Aivika.Distributed.Optimistic.Event
-       (syncEvent,
+       (retryEvent,
+        syncEvent,
         syncEventInStopTime) where
 
 import Simulation.Aivika.Trans
