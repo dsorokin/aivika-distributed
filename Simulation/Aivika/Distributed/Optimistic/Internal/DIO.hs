@@ -134,7 +134,7 @@ defaultDIOParams =
               dioOutputMessageQueueSizeThreshold = 10000,
               dioTimeServerMessageTimeout = 5000000,
               dioAllowPrematureIO = False,
-              dioAllowProcessingOutdatedMessage = True
+              dioAllowProcessingOutdatedMessage = False
             }
 
 -- | Return the parameters of the current computation.
