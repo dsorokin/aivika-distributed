@@ -608,7 +608,28 @@ handleEventRetry =
                 ": waiting for arriving a message..."
               ---
               ch <- messageChannel
-              liftIOUnsafe $ awaitChannel ch
+              dt <- fmap dioTimeServerMessageTimeout dioParams
+              f  <- liftIOUnsafe $
+                    timeout dt $ awaitChannel ch
               ok <- invokeEvent p $ runTimeWarp processChannelMessages
-              when ok loop
+              when ok $
+                case f of
+                  Just _  -> loop
+                  Nothing -> loop0
+         loop0 =
+           do ---
+              logDIO DEBUG $
+                "t = " ++ show t ++
+                ": waiting for arriving a message in ring 0..."
+              ---
+              ch <- messageChannel
+              dt <- fmap dioTimeServerMessageTimeout dioParams
+              f  <- liftIOUnsafe $
+                    timeout dt $ awaitChannel ch
+              ok <- invokeEvent p $ runTimeWarp processChannelMessages
+              when ok $
+                case f of
+                  Just _  -> loop
+                  Nothing ->
+                    error "Detected a deadlock when retrying the computations: handleEventRetry"
      loop
