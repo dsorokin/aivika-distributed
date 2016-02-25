@@ -16,7 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
-        rollbackInputMessages,
+        retryInputMessages,
         reduceInputMessages) where
 
 import Data.Maybe
@@ -152,9 +152,20 @@ enqueueMessage q m =
 -- | Log the rollback.
 logRollbackInputMessages :: Double -> Double -> Bool -> DIO ()
 logRollbackInputMessages t0 t including =
-  do logDIO NOTICE $
-       "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t) ++
-       (if not including then " not including" else "")
+  logDIO NOTICE $
+  "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t) ++
+  (if not including then " not including" else "")
+
+-- | Enqueue a new message ignoring the duplicated messages.
+retryInputMessages :: InputMessageQueue -> Double -> TimeWarp DIO ()
+retryInputMessages q t =
+  TimeWarp $ \p ->
+  do i <- liftIOUnsafe $ lookupLeftMessageIndex q t
+     let i' = if i >= 0 then i else (- i - 1)
+     invokeEvent p $
+       rollbackInputMessages q t True $
+       liftIOUnsafe $
+       writeIORef (inputMessageIndex q) i'
 
 -- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
 rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()

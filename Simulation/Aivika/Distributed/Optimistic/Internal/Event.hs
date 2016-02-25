@@ -599,9 +599,8 @@ handleEventRetry =
        "t = " ++ show t ++
        ": retrying the computations..."
      ---
-     invokeEvent p $
-       rollbackInputMessages (queueInputMessages q) t True $
-       return ()
+     invokeTimeWarp p $
+       retryInputMessages (queueInputMessages q) t
      let loop =
            do ---
               logDIO DEBUG $

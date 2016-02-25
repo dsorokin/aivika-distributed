@@ -16,7 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
-        rollbackInputMessages,
+        retryInputMessages,
         reduceInputMessages) where
 
 import Simulation.Aivika.Trans.Simulation
@@ -44,6 +44,6 @@ enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
 
-rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
+retryInputMessages :: InputMessageQueue -> Double -> TimeWarp DIO ()
 
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
