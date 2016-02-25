@@ -285,12 +285,36 @@ lookupRightMessageIndex' q t left right =
               else if index == right
                    then return right
                    else lookupRightMessageIndex' q t index right
+
+-- | Search for the leftmost message index.
+lookupLeftMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
+lookupLeftMessageIndex' q t left right =
+  if left > right
+  then return $ - (right + 1) - 1
+  else  
+    do let index = (left + right) `div` 2
+       item <- readVector (inputMessages q) index
+       let m' = itemMessage item
+           t' = messageReceiveTime m'
+       if t' > t
+         then lookupLeftMessageIndex' q t left (index - 1)
+         else if t' < t
+              then lookupLeftMessageIndex' q t (index + 1) right
+              else if index == left
+                   then return left
+                   else lookupLeftMessageIndex' q t left index
  
 -- | Search for the rightmost message index.
 lookupRightMessageIndex :: InputMessageQueue -> Double -> IO Int
 lookupRightMessageIndex q t =
   do n <- vectorCount (inputMessages q)
      lookupRightMessageIndex' q t 0 (n - 1)
+ 
+-- | Search for the leftmost message index.
+lookupLeftMessageIndex :: InputMessageQueue -> Double -> IO Int
+lookupLeftMessageIndex q t =
+  do n <- vectorCount (inputMessages q)
+     lookupLeftMessageIndex' q t 0 (n - 1)
 
 -- | Reduce the input messages till the specified time.
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
