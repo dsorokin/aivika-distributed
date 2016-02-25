@@ -267,7 +267,8 @@ activateMessage q i =
                      liftIOUnsafe $
                      modifyIORef (inputMessageActions q) (loop :)
                    enqueueEvent (messageReceiveTime m) $
-                     do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+                     do liftIOUnsafe $ modifyIORef' (inputMessageIndex q) (+ 1)
+                        f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
                         unless f $
                           triggerSignal (inputMessageSource q) m
      loop
