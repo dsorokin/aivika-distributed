@@ -216,7 +216,7 @@ leftMessageIndex q m i
 -- The second result is 'Nothing' if the message is duplicated.
 findAntiMessage :: InputMessageQueue -> Message -> IO (Int, Maybe Bool)
 findAntiMessage q m =
-  do right <- lookupRightMessageIndex q m
+  do right <- lookupRightMessageIndex q (messageReceiveTime m)
      if right < 0
        then return (- right - 1, Just False)
        else let loop i
@@ -269,29 +269,28 @@ insertMessage q m i =
      vectorInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
-lookupRightMessageIndex' :: InputMessageQueue -> Message -> Int -> Int -> IO Int
-lookupRightMessageIndex' q m left right =
+lookupRightMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
+lookupRightMessageIndex' q t left right =
   if left > right
   then return $ - (right + 1) - 1
   else  
     do let index = ((left + 1) + right) `div` 2
        item <- readVector (inputMessages q) index
        let m' = itemMessage item
-           t  = messageReceiveTime m
            t' = messageReceiveTime m'
        if t' > t
-         then lookupRightMessageIndex' q m left (index - 1)
+         then lookupRightMessageIndex' q t left (index - 1)
          else if t' < t
-              then lookupRightMessageIndex' q m (index + 1) right
+              then lookupRightMessageIndex' q t (index + 1) right
               else if index == right
                    then return right
-                   else lookupRightMessageIndex' q m index right
+                   else lookupRightMessageIndex' q t index right
  
 -- | Search for the rightmost message index.
-lookupRightMessageIndex :: InputMessageQueue -> Message -> IO Int
-lookupRightMessageIndex q m =
+lookupRightMessageIndex :: InputMessageQueue -> Double -> IO Int
+lookupRightMessageIndex q t =
   do n <- vectorCount (inputMessages q)
-     lookupRightMessageIndex' q m 0 (n - 1)
+     lookupRightMessageIndex' q t 0 (n - 1)
 
 -- | Reduce the input messages till the specified time.
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
