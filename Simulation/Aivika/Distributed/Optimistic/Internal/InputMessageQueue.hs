@@ -157,11 +157,12 @@ logRollbackInputMessages t0 t including =
   "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t) ++
   (if not including then " not including" else "")
 
--- | Enqueue a new message ignoring the duplicated messages.
-retryInputMessages :: InputMessageQueue -> Double -> TimeWarp DIO ()
-retryInputMessages q t =
+-- | Retry the computations.
+retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
+retryInputMessages q =
   TimeWarp $ \p ->
-  do i <- liftIOUnsafe $ lookupLeftMessageIndex q t
+  do let t = pointTime p
+     i <- liftIOUnsafe $ lookupLeftMessageIndex q t
      let i' = if i >= 0 then i else (- i - 1)
      invokeEvent p $
        rollbackInputMessages q t True $

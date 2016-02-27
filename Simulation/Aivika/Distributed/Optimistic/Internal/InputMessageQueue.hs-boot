@@ -44,6 +44,6 @@ enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
 
-retryInputMessages :: InputMessageQueue -> Double -> TimeWarp DIO ()
+retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
 
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
