@@ -255,6 +255,10 @@ annihilateMessage q i =
   do item <- readVector (inputMessages q) i
      vectorDeleteAt (inputMessages q) i
      writeIORef (itemAnnihilated item) True
+     ---
+     putStrLn $
+       "*** Annihilated the message at index " ++ show i ++ " ***"
+     ---
 
 -- | Activate a message at the specified index.
 activateMessage :: InputMessageQueue -> Int -> Event DIO ()
@@ -303,7 +307,7 @@ lookupRightMessageIndex' q t left right =
 lookupLeftMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
 lookupLeftMessageIndex' q t left right =
   if left > right
-  then return $ - (right + 1) - 1
+  then return $ - left - 1
   else  
     do let index = (left + right) `div` 2
        item <- readVector (inputMessages q) index
