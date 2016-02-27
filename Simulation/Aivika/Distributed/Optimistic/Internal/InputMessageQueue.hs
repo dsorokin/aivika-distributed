@@ -119,7 +119,7 @@ enqueueMessage q m =
        Nothing -> return ()
        Just True | (i < i0 || t < t0) ->
          do -- found an anti-message at the specified index
-            i' <- liftIOUnsafe $ leftMessageIndex q m i
+            i' <- liftIOUnsafe $ leftMessageIndex q t i
             let p' = pastPoint t p
             logRollbackInputMessages t0 t True
             invokeEvent p' $
@@ -206,20 +206,19 @@ performMessageActions q =
      liftIOUnsafe $ writeIORef (inputMessageActions q) []
      sequence_ xs
 
--- | Return the leftmost index for the current message.
-leftMessageIndex :: InputMessageQueue -> Message -> Int -> IO Int
-leftMessageIndex q m i
+-- | Return the leftmost index for the current time.
+leftMessageIndex :: InputMessageQueue -> Double -> Int -> IO Int
+leftMessageIndex q t i
   | i == 0    = return 0
   | otherwise = do let i' = i - 1
                    item' <- readVector (inputMessages q) i'
                    let m' = itemMessage item'
-                       t  = messageReceiveTime m
                        t' = messageReceiveTime m'
                    if t' > t
                      then error "Incorrect index: leftMessageIndex"
                      else if t' < t
                           then return i
-                          else leftMessageIndex q m i'
+                          else leftMessageIndex q t i'
 
 -- | Find an anti-message and return the index with 'True'; otherwise,
 -- return the insertion index within the current receive time with 'False'.
