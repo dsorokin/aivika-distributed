@@ -533,8 +533,7 @@ syncLocalTime0 m =
                                 Just _  ->
                                   invokeTimeWarp p $ syncLocalTime m
                                 Nothing ->
-                                  do invokeEvent p sendLocalTime
-                                     invokeTimeWarp p $ syncLocalTime0 m
+                                  error "Detected a deadlock when synchronizing the local time: syncLocalTime0"
                       else return ()
 
 -- | Run the computation and return a flag indicating whether there was no rollback.
