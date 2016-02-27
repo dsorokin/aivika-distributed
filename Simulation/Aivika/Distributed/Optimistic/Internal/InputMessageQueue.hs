@@ -255,10 +255,6 @@ annihilateMessage q i =
   do item <- readVector (inputMessages q) i
      vectorDeleteAt (inputMessages q) i
      writeIORef (itemAnnihilated item) True
-     ---
-     putStrLn $
-       "*** Annihilated the message at index " ++ show i ++ " ***"
-     ---
 
 -- | Activate a message at the specified index.
 activateMessage :: InputMessageQueue -> Int -> Event DIO ()
