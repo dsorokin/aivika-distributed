@@ -133,12 +133,13 @@ enqueueMessage q m =
        Just False | (i < i0 || t < t0) ->
          do -- insert the message at the specified right index
             let p' = pastPoint t p
+                i' = min i i0
             logRollbackInputMessages t0 t False
             invokeEvent p' $
               rollbackInputMessages q t False $
               Event $ \p' ->
               do liftIOUnsafe $
-                   do writeIORef (inputMessageIndex q) i
+                   do writeIORef (inputMessageIndex q) i'
                       insertMessage q m i
                  invokeEvent p' $ activateMessage q i
             invokeEvent p' $
