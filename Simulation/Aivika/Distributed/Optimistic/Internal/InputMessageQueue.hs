@@ -291,12 +291,16 @@ lookupRightMessageIndex' q t left right =
        item <- readVector (inputMessages q) index
        let m' = itemMessage item
            t' = messageReceiveTime m'
-       if t' > t
-         then lookupRightMessageIndex' q t left (index - 1)
-         else if t' < t
-              then lookupRightMessageIndex' q t (index + 1) right
-              else if index == right
-                   then return right
+       if left == right
+         then if t' > t
+              then return $ - right - 1
+              else if t' < t
+                   then return $ - (right + 1) - 1
+                   else return right
+         else if t' > t
+              then lookupRightMessageIndex' q t left (index - 1)
+              else if t' < t
+                   then lookupRightMessageIndex' q t (index + 1) right
                    else lookupRightMessageIndex' q t index right
 
 -- | Search for the leftmost message index.
@@ -309,12 +313,16 @@ lookupLeftMessageIndex' q t left right =
        item <- readVector (inputMessages q) index
        let m' = itemMessage item
            t' = messageReceiveTime m'
-       if t' > t
-         then lookupLeftMessageIndex' q t left (index - 1)
-         else if t' < t
-              then lookupLeftMessageIndex' q t (index + 1) right
-              else if index == left
-                   then return left
+       if left == right
+         then if t' > t
+              then return $ - left - 1
+              else if t' < t
+                   then return $ - (left + 1) - 1
+                   else return left
+         else if t' > t
+              then lookupLeftMessageIndex' q t left (index - 1)
+              else if t' < t
+                   then lookupLeftMessageIndex' q t (index + 1) right
                    else lookupLeftMessageIndex' q t left index
  
 -- | Search for the rightmost message index.
