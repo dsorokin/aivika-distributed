@@ -206,7 +206,7 @@ requireEmptyMessageActions q =
      unless (null xs) $
        error "There are incomplete message actions: requireEmptyMessageActions"
 
--- | Perform the message actions
+-- | Perform the message actions.
 performMessageActions :: InputMessageQueue -> Event DIO ()
 performMessageActions q =
   do xs <- liftIOUnsafe $ readIORef (inputMessageActions q)
