@@ -168,7 +168,7 @@ retryInputMessages q =
   TimeWarp $ \p ->
   do let t = pointTime p
      i <- liftIOUnsafe $ lookupLeftMessageIndex q t
-     let i' = if i >= 0 then i else (- i - 1)
+     let i' = if i >= 0 then i else complement i
      invokeEvent p $
        rollbackInputMessages q t True $
        liftIOUnsafe $
