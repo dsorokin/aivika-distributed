@@ -136,7 +136,7 @@ enqueueMessage q m =
                  invokeEvent p' $
                    inputMessageRollbackTime q t
          else liftIOUnsafe $ annihilateMessage q i
-       Just i' ->
+       Just i' | i' < 0 ->
          let i = complement i'
          in if i < i0 || t < t0
             then do -- insert the message at the specified right index
