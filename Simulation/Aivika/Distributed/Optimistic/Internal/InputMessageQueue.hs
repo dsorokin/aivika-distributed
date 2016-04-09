@@ -103,6 +103,10 @@ inputMessageQueueIndex = readIORef . inputMessageIndex
 inputMessageQueueSize :: InputMessageQueue -> IO Int
 inputMessageQueueSize = vectorCount . inputMessages
 
+-- | Return a complement.
+complement :: Int -> Int
+complement x = - x - 1
+
 -- | Raised when the message is enqueued.
 messageEnqueued :: InputMessageQueue -> Signal DIO Message
 messageEnqueued q = publishSignal (inputMessageSource q)
@@ -114,41 +118,42 @@ enqueueMessage q m =
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
      let t  = messageReceiveTime m
          t0 = pointTime p
-     (i, f) <- liftIOUnsafe $ findAntiMessage q m
-     case f of
+     i <- liftIOUnsafe $ findAntiMessage q m
+     case i of
        Nothing -> return ()
-       Just True | (i < i0 || t < t0) ->
-         do -- found an anti-message at the specified index
-            i' <- liftIOUnsafe $ leftMessageIndex q t i
-            let p' = pastPoint t p
-            logRollbackInputMessages t0 t True
-            invokeEvent p' $
-              rollbackInputMessages q t True $
-              Event $ \p' ->
-              liftIOUnsafe $
-              do writeIORef (inputMessageIndex q) i'
-                 annihilateMessage q i
-            invokeEvent p' $
-              inputMessageRollbackTime q t
-       Just False | (i < i0 || t < t0) ->
-         do -- insert the message at the specified right index
-            let p' = pastPoint t p
-                i' = min i i0
-            logRollbackInputMessages t0 t False
-            invokeEvent p' $
-              rollbackInputMessages q t False $
-              Event $ \p' ->
-              do liftIOUnsafe $
+       Just i | i >= 0 ->
+         if i < i0 || t < t0
+         then do -- found the anti-message at the specified index
+                 i' <- liftIOUnsafe $ leftMessageIndex q t i
+                 let p' = pastPoint t p
+                 logRollbackInputMessages t0 t True
+                 invokeEvent p' $
+                   rollbackInputMessages q t True $
+                   Event $ \p' ->
+                   liftIOUnsafe $
                    do writeIORef (inputMessageIndex q) i'
-                      insertMessage q m i
-                 invokeEvent p' $ activateMessage q i
-            invokeEvent p' $
-              inputMessageRollbackTime q t
-       Just True  ->
-         liftIOUnsafe $ annihilateMessage q i
-       Just False ->
-         do liftIOUnsafe $ insertMessage q m i
-            invokeEvent p $ activateMessage q i
+                      annihilateMessage q i
+                 invokeEvent p' $
+                   inputMessageRollbackTime q t
+         else liftIOUnsafe $ annihilateMessage q i
+       Just i' ->
+         let i = complement i'
+         in if i < i0 || t < t0
+            then do -- insert the message at the specified right index
+                    let p' = pastPoint t p
+                        i' = min i i0
+                    logRollbackInputMessages t0 t False
+                    invokeEvent p' $
+                      rollbackInputMessages q t False $
+                      Event $ \p' ->
+                      do liftIOUnsafe $
+                           do writeIORef (inputMessageIndex q) i'
+                              insertMessage q m i
+                         invokeEvent p' $ activateMessage q i
+                    invokeEvent p' $
+                      inputMessageRollbackTime q t
+            else do liftIOUnsafe $ insertMessage q m i
+                    invokeEvent p $ activateMessage q i
 
 -- | Log the rollback.
 logRollbackInputMessages :: Double -> Double -> Bool -> DIO ()
@@ -222,17 +227,16 @@ leftMessageIndex q t i
                           then return i
                           else leftMessageIndex q t i'
 
--- | Find an anti-message and return the index with 'True'; otherwise,
--- return the insertion index within the current receive time with 'False'.
---
--- The second result is 'Nothing' if the message is duplicated.
-findAntiMessage :: InputMessageQueue -> Message -> IO (Int, Maybe Bool)
+-- | Find an anti-message and return the index; otherwise, return a complement to
+-- the insertion index with the current receive time. The result is 'Nothing' if
+-- the message is duplicated.
+findAntiMessage :: InputMessageQueue -> Message -> IO (Maybe Int)
 findAntiMessage q m =
   do right <- lookupRightMessageIndex q (messageReceiveTime m)
      if right < 0
-       then return (- right - 1, Just False)
+       then return (Just right)
        else let loop i
-                  | i < 0     = return (right + 1, Just False)
+                  | i < 0     = return (Just $ complement (right + 1))
                   | otherwise =
                     do item <- readVector (inputMessages q) i
                        let m' = itemMessage item
@@ -241,11 +245,11 @@ findAntiMessage q m =
                        if t' > t
                          then error "Incorrect index: findAntiMessage"
                          else if t' < t
-                              then return (right + 1, Just False)
+                              then return (Just $ complement (right + 1))
                               else if antiMessages m m'
-                                   then return (i, Just True)
+                                   then return (Just i)
                                    else if m == m'
-                                        then return (i, Nothing)
+                                        then return Nothing
                                         else loop (i - 1)
             in loop right       
 
