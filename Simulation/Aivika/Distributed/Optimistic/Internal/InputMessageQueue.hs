@@ -268,7 +268,14 @@ activateMessage q i =
                      liftIOUnsafe $
                      modifyIORef (inputMessageActions q) (loop :)
                    enqueueEvent (messageReceiveTime m) $
-                     do liftIOUnsafe $ modifyIORef' (inputMessageIndex q) (+ 1)
+                     do liftIOUnsafe $
+                          do index <- readIORef (inputMessageIndex q)
+                             item' <- readVector (inputMessages q) index
+                             let m' = itemMessage item'
+                             unless (m == m') $
+                               error "The queue index refers to another message: activateMessage"
+                             let index' = 1 + index
+                             index' `seq` writeIORef (inputMessageIndex q) index'
                         f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
                         unless f $
                           triggerSignal (inputMessageSource q) m
