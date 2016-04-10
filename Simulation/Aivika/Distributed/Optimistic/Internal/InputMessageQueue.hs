@@ -125,7 +125,7 @@ enqueueMessage q m =
        Just i | i >= 0 ->
          if i < i0 || t < t0
          then if i >= i0
-              then error "Invalid queue index when annihilating: enqueueMessage"
+              then error $ "Invalid queue index (" ++ show i0 ++ ") when annihilating: enqueueMessage"
               else do -- found the anti-message at the specified index
                       i' <- liftIOUnsafe $ leftMessageIndex q t i
                       let p' = pastPoint t p
@@ -143,7 +143,7 @@ enqueueMessage q m =
          let i = complement i'
          in if i < i0 || t < t0
             then if i > i0 || (i == i0 && i0 /= n)
-                 then error "Invalid queue index when inserting: enqueueMessage"
+                 then error $ "Invalid queue index (" ++ show i0 ++ ") when inserting: enqueueMessage"
                  else do -- insert the message at the specified right index
                          let p' = pastPoint t p
                              i' = i
@@ -282,7 +282,7 @@ activateMessage q i =
                              item' <- readVector (inputMessages q) index
                              let m' = itemMessage item'
                              unless (m == m') $
-                               error "The queue index refers to another message: activateMessage"
+                               error $ "The queue index (" ++ show index ++ ") refers to another message: activateMessage"
                              let index' = 1 + index
                              index' `seq` writeIORef (inputMessageIndex q) index'
                         f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
