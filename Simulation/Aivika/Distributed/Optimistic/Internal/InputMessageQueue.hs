@@ -116,6 +116,7 @@ enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 enqueueMessage q m =
   TimeWarp $ \p ->
   do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
+     n  <- liftIOUnsafe $ vectorCount (inputMessages q)
      let t  = messageReceiveTime m
          t0 = pointTime p
      i <- liftIOUnsafe $ findAntiMessage q m
@@ -123,35 +124,39 @@ enqueueMessage q m =
        Nothing -> return ()
        Just i | i >= 0 ->
          if i < i0 || t < t0
-         then do -- found the anti-message at the specified index
-                 i' <- liftIOUnsafe $ leftMessageIndex q t i
-                 let p' = pastPoint t p
-                 logRollbackInputMessages t0 t True
-                 invokeEvent p' $
-                   rollbackInputMessages q t True $
-                   Event $ \p' ->
-                   liftIOUnsafe $
-                   do writeIORef (inputMessageIndex q) i'
-                      annihilateMessage q i
-                 invokeEvent p' $
-                   inputMessageRollbackTime q t
+         then if i >= i0
+              then error "Invalid queue index when annihilating: enqueueMessage"
+              else do -- found the anti-message at the specified index
+                      i' <- liftIOUnsafe $ leftMessageIndex q t i
+                      let p' = pastPoint t p
+                      logRollbackInputMessages t0 t True
+                      invokeEvent p' $
+                        rollbackInputMessages q t True $
+                        Event $ \p' ->
+                        liftIOUnsafe $
+                        do writeIORef (inputMessageIndex q) i'
+                           annihilateMessage q i
+                      invokeEvent p' $
+                        inputMessageRollbackTime q t
          else liftIOUnsafe $ annihilateMessage q i
        Just i' | i' < 0 ->
          let i = complement i'
          in if i < i0 || t < t0
-            then do -- insert the message at the specified right index
-                    let p' = pastPoint t p
-                        i' = min i i0
-                    logRollbackInputMessages t0 t False
-                    invokeEvent p' $
-                      rollbackInputMessages q t False $
-                      Event $ \p' ->
-                      do liftIOUnsafe $
-                           do writeIORef (inputMessageIndex q) i'
-                              insertMessage q m i
-                         invokeEvent p' $ activateMessage q i
-                    invokeEvent p' $
-                      inputMessageRollbackTime q t
+            then if i > i0 || (i == i0 && i0 /= n)
+                 then error "Invalid queue index when inserting: enqueueMessage"
+                 else do -- insert the message at the specified right index
+                         let p' = pastPoint t p
+                             i' = i
+                         logRollbackInputMessages t0 t False
+                         invokeEvent p' $
+                           rollbackInputMessages q t False $
+                           Event $ \p' ->
+                           do liftIOUnsafe $
+                                do writeIORef (inputMessageIndex q) i'
+                                   insertMessage q m i
+                              invokeEvent p' $ activateMessage q i
+                         invokeEvent p' $
+                           inputMessageRollbackTime q t
             else do liftIOUnsafe $ insertMessage q m i
                     invokeEvent p $ activateMessage q i
 
