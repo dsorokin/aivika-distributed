@@ -260,13 +260,12 @@ isEventOverflow =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      n1 <- liftIOUnsafe $ logSize (queueLog q)
-     n2 <- liftIOUnsafe $ inputMessageQueueIndex (queueInputMessages q)
      n3 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
      ps <- dioParams
      let th1 = dioUndoableLogSizeThreshold ps
          th2 = dioInputMessageQueueIndexThreshold ps
          th3 = dioOutputMessageQueueSizeThreshold ps
-     if (n1 >= th1) || (n2 >= th2) || (n3 >= th3)
+     if (n1 >= th1) || (n3 >= th3)
        then do logDIO NOTICE $
                  "t = " ++ (show $ pointTime p) ++
                  ": detected the event overflow"

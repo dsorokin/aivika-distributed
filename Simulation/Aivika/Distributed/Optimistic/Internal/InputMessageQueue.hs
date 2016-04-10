@@ -12,7 +12,6 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
-        inputMessageQueueIndex,
         inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
@@ -57,8 +56,6 @@ data InputMessageQueue =
                       -- ^ The message source.
                       inputMessages :: Vector InputMessageQueueItem,
                       -- ^ The input messages.
-                      inputMessageIndex :: IORef Int,
-                      -- ^ An index of the next actual item.
                       inputMessageActions :: IORef [Event DIO ()]
                       -- ^ The list of actions to perform.
                     }
@@ -67,8 +64,10 @@ data InputMessageQueue =
 data InputMessageQueueItem =
   InputMessageQueueItem { itemMessage :: Message,
                           -- ^ The item message.
-                          itemAnnihilated :: IORef Bool
+                          itemAnnihilated :: IORef Bool,
                           -- ^ Whether the item was annihilated.
+                          itemProcessed :: IORef Bool
+                          -- ^ Whether the item was processed.
                         }
 
 -- | Create a new input message queue.
@@ -83,8 +82,7 @@ newInputMessageQueue :: UndoableLog
                         -> DIO InputMessageQueue
 newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
   do ms <- liftIOUnsafe newVector
-     r1 <- liftIOUnsafe $ newIORef 0
-     r2 <- liftIOUnsafe $ newIORef []
+     r  <- liftIOUnsafe $ newIORef []
      s  <- newSignalSource0
      return InputMessageQueue { inputMessageLog = log,
                                 inputMessageRollbackPre = rollbackPre,
@@ -92,12 +90,7 @@ newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
                                 inputMessageRollbackTime = rollbackTime,
                                 inputMessageSource = s,
                                 inputMessages = ms,
-                                inputMessageIndex = r1,
-                                inputMessageActions = r2 }
-
--- | Return the input message queue index.
-inputMessageQueueIndex :: InputMessageQueue -> IO Int
-inputMessageQueueIndex = readIORef . inputMessageIndex
+                                inputMessageActions = r }
 
 -- | Return the input message queue size.
 inputMessageQueueSize :: InputMessageQueue -> IO Int
@@ -115,50 +108,39 @@ messageEnqueued q = publishSignal (inputMessageSource q)
 enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 enqueueMessage q m =
   TimeWarp $ \p ->
-  do i0 <- liftIOUnsafe $ readIORef (inputMessageIndex q)
-     n  <- liftIOUnsafe $ vectorCount (inputMessages q)
-     let t  = messageReceiveTime m
+  do let t  = messageReceiveTime m
          t0 = pointTime p
      i <- liftIOUnsafe $ findAntiMessage q m
      case i of
        Nothing -> return ()
        Just i | i >= 0 ->
-         if i < i0 || t < t0
-         then if i >= i0
-              then error $ "Invalid queue index (" ++ show i0 ++ ") when annihilating: enqueueMessage"
-              else do -- found the anti-message at the specified index
-                      i' <- liftIOUnsafe $ leftMessageIndex q t i
-                      let p' = pastPoint t p
+         do -- found the anti-message at the specified index
+            item <- liftIOUnsafe $ readVector (inputMessages q) i
+            f <- liftIOUnsafe $ readIORef (itemProcessed item)
+            if f
+              then do let p' = pastPoint t p
                       logRollbackInputMessages t0 t True
                       invokeEvent p' $
                         rollbackInputMessages q t True $
-                        Event $ \p' ->
-                        liftIOUnsafe $
-                        do writeIORef (inputMessageIndex q) i'
-                           annihilateMessage q i
+                        liftIOUnsafe $ annihilateMessage q i
                       invokeEvent p' $
                         inputMessageRollbackTime q t
-         else liftIOUnsafe $ annihilateMessage q i
+              else liftIOUnsafe $ annihilateMessage q i
        Just i' | i' < 0 ->
-         let i = complement i'
-         in if i < i0 || t < t0
-            then if i > i0 || (i == i0 && i0 /= n)
-                 then error $ "Invalid queue index (" ++ show i0 ++ ") when inserting: enqueueMessage"
-                 else do -- insert the message at the specified right index
-                         let p' = pastPoint t p
-                             i' = i
-                         logRollbackInputMessages t0 t False
-                         invokeEvent p' $
-                           rollbackInputMessages q t False $
-                           Event $ \p' ->
-                           do liftIOUnsafe $
-                                do writeIORef (inputMessageIndex q) i'
-                                   insertMessage q m i
-                              invokeEvent p' $ activateMessage q i
-                         invokeEvent p' $
-                           inputMessageRollbackTime q t
-            else do liftIOUnsafe $ insertMessage q m i
-                    invokeEvent p $ activateMessage q i
+         do -- insert the message at the specified right index
+            let i = complement i'
+            if t < t0
+              then do let p' = pastPoint t p
+                      logRollbackInputMessages t0 t False
+                      invokeEvent p' $
+                        rollbackInputMessages q t False $
+                        Event $ \p' ->
+                        do liftIOUnsafe $ insertMessage q m i
+                           invokeEvent p' $ activateMessage q i
+                      invokeEvent p' $
+                        inputMessageRollbackTime q t
+              else do liftIOUnsafe $ insertMessage q m i
+                      invokeEvent p $ activateMessage q i
 
 -- | Log the rollback.
 logRollbackInputMessages :: Double -> Double -> Bool -> DIO ()
@@ -172,12 +154,9 @@ retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
 retryInputMessages q =
   TimeWarp $ \p ->
   do let t = pointTime p
-     i <- liftIOUnsafe $ lookupLeftMessageIndex q t
-     let i' = if i >= 0 then i else complement i
      invokeEvent p $
        rollbackInputMessages q t True $
-       liftIOUnsafe $
-       writeIORef (inputMessageIndex q) i'
+       return ()
 
 -- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
 rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
@@ -276,25 +255,25 @@ activateMessage q i =
                 do writeLog (inputMessageLog q) $
                      liftIOUnsafe $
                      modifyIORef (inputMessageActions q) (loop :)
+                   liftIOUnsafe $
+                     writeIORef (itemProcessed item) False
                    enqueueEvent (messageReceiveTime m) $
-                     do liftIOUnsafe $
-                          do index <- readIORef (inputMessageIndex q)
-                             item' <- readVector (inputMessages q) index
-                             let m' = itemMessage item'
-                             unless (m == m') $
-                               error $ "The queue index (" ++ show index ++ ") refers to another message: activateMessage"
-                             let index' = 1 + index
-                             index' `seq` writeIORef (inputMessageIndex q) index'
-                        f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
+                     do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
                         unless f $
-                          triggerSignal (inputMessageSource q) m
+                          do writeLog (inputMessageLog q) $
+                               liftIOUnsafe $
+                               writeIORef (itemProcessed item) False
+                             liftIOUnsafe $
+                               writeIORef (itemProcessed item) True
+                             triggerSignal (inputMessageSource q) m
      loop
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 insertMessage q m i =
-  do r <- newIORef False
-     let item = InputMessageQueueItem m r
+  do r1 <- newIORef False
+     r2 <- newIORef False
+     let item = InputMessageQueueItem m r1 r2
      vectorInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
@@ -359,14 +338,13 @@ reduceInputMessages q t =
   do count <- vectorCount (inputMessages q)
      len   <- loop count 0
      when (len > 0) $
-       do vectorDeleteRange (inputMessages q) 0 len
-          modifyIORef' (inputMessageIndex q) (\i -> i - len)
-            where
-              loop n i
-                | i >= n    = return i
-                | otherwise = do item <- readVector (inputMessages q) i
-                                 let m = itemMessage item
-                                 if messageReceiveTime m < t
-                                   then loop n (i + 1)
-                                   else return i
+       vectorDeleteRange (inputMessages q) 0 len
+       where
+         loop n i
+           | i >= n    = return i
+           | otherwise = do item <- readVector (inputMessages q) i
+                            let m = itemMessage item
+                            if messageReceiveTime m < t
+                              then loop n (i + 1)
+                              else return i
 

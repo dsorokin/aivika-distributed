@@ -12,7 +12,6 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
-        inputMessageQueueIndex,
         inputMessageQueueSize,
         enqueueMessage,
         messageEnqueued,
@@ -35,8 +34,6 @@ newInputMessageQueue :: UndoableLog
                         -> (Double -> Bool -> Event DIO ())
                         -> (Double -> Event DIO ())
                         -> DIO InputMessageQueue
-
-inputMessageQueueIndex :: InputMessageQueue -> IO Int
 
 inputMessageQueueSize :: InputMessageQueue -> IO Int
 
