@@ -255,8 +255,6 @@ activateMessage q i =
                 do writeLog (inputMessageLog q) $
                      liftIOUnsafe $
                      modifyIORef (inputMessageActions q) (loop :)
-                   liftIOUnsafe $
-                     writeIORef (itemProcessed item) False
                    enqueueEvent (messageReceiveTime m) $
                      do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
                         unless f $
