@@ -279,7 +279,7 @@ insertMessage q m i =
 lookupRightMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
 lookupRightMessageIndex' q t left right =
   if left > right
-  then return $ - (right + 1) - 1
+  then return $ complement (right + 1)
   else  
     do let index = ((left + 1) + right) `div` 2
        item <- readVector (inputMessages q) index
@@ -287,9 +287,9 @@ lookupRightMessageIndex' q t left right =
            t' = messageReceiveTime m'
        if left == right
          then if t' > t
-              then return $ - right - 1
+              then return $ complement right
               else if t' < t
-                   then return $ - (right + 1) - 1
+                   then return $ complement (right + 1)
                    else return right
          else if t' > t
               then lookupRightMessageIndex' q t left (index - 1)
@@ -301,7 +301,7 @@ lookupRightMessageIndex' q t left right =
 lookupLeftMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
 lookupLeftMessageIndex' q t left right =
   if left > right
-  then return $ - left - 1
+  then return $ complement left
   else  
     do let index = (left + right) `div` 2
        item <- readVector (inputMessages q) index
@@ -309,9 +309,9 @@ lookupLeftMessageIndex' q t left right =
            t' = messageReceiveTime m'
        if left == right
          then if t' > t
-              then return $ - left - 1
+              then return $ complement left
               else if t' < t
-                   then return $ - (left + 1) - 1
+                   then return $ complement (left + 1)
                    else return left
          else if t' > t
               then lookupLeftMessageIndex' q t left (index - 1)
