@@ -35,6 +35,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
 import Control.Exception (throw)
+import Control.Monad.Catch as C
 import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Trans.Exception
@@ -108,10 +109,10 @@ instance Functor DIO where
 instance MonadException DIO where
 
   catchComp (DIO m) h = DIO $ \ps ->
-    DP.catch (m ps) (\e -> unDIO (h e) ps)
+    C.catch (m ps) (\e -> unDIO (h e) ps)
 
   finallyComp (DIO m1) (DIO m2) = DIO $ \ps ->
-    DP.finally (m1 ps) (m2 ps)
+    C.finally (m1 ps) (m2 ps)
   
   throwComp e = DIO $ \ps ->
     throw e
