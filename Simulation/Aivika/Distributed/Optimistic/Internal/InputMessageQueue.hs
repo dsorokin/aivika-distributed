@@ -263,7 +263,8 @@ activateMessage q i =
                                writeIORef (itemProcessed item) False
                              liftIOUnsafe $
                                writeIORef (itemProcessed item) True
-                             triggerSignal (inputMessageSource q) m
+                             unless (messageAntiToggle m) $
+                               triggerSignal (inputMessageSource q) m
      loop
 
 -- | Insert a new message.
