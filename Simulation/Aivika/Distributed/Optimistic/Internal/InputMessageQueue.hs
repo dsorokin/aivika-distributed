@@ -157,6 +157,8 @@ retryInputMessages q =
      invokeEvent p $
        rollbackInputMessages q t True $
        return ()
+     invokeEvent p $
+       inputMessageRollbackTime q t
 
 -- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
 rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
