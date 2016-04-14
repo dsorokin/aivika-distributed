@@ -122,10 +122,10 @@ enqueueMessage q m =
                       logRollbackInputMessages t0 t True
                       invokeEvent p' $
                         rollbackInputMessages q t True $
-                        liftIOUnsafe $ annihilateMessage q i
+                        liftIOUnsafe $ annihilateMessage q m i
                       invokeEvent p' $
                         inputMessageRollbackTime q t
-              else liftIOUnsafe $ annihilateMessage q i
+              else liftIOUnsafe $ annihilateMessage q m i
        Just i' | i' < 0 ->
          do -- insert the message at the specified right index
             let i = complement i'
@@ -240,9 +240,12 @@ findAntiMessage q m =
             in loop right       
 
 -- | Annihilate a message at the specified index.
-annihilateMessage :: InputMessageQueue -> Int -> IO ()
-annihilateMessage q i =
+annihilateMessage :: InputMessageQueue -> Message -> Int -> IO ()
+annihilateMessage q m i =
   do item <- readVector (inputMessages q) i
+     let m' = itemMessage item
+     unless (antiMessages m m') $
+       error "Cannot annihilate another message: annihilateMessage"
      vectorDeleteAt (inputMessages q) i
      writeIORef (itemAnnihilated item) True
 
