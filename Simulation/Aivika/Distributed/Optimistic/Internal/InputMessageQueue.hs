@@ -274,8 +274,24 @@ activateMessage q i =
 
 -- | Insert a new message.
 insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
+-- insertMessage q m i =
+--   do r1 <- newIORef False
+--      r2 <- newIORef False
+--      let item = InputMessageQueueItem m r1 r2
+--      vectorInsert (inputMessages q) i item
 insertMessage q m i =
-  do r1 <- newIORef False
+  do n <- vectorCount (inputMessages q)
+     when (i < n) $
+       do item0 <- readVector (inputMessages q) i
+          let m0 = itemMessage item0
+          unless (messageReceiveTime m < messageReceiveTime m0) $
+            error "Error inserting a new input message (check before): insertMessage"
+     when (i > 0) $
+       do item0 <- readVector (inputMessages q) (i - 1)
+          let m0 = itemMessage item0
+          unless (messageReceiveTime m >= messageReceiveTime m0) $
+            error "Error inserting a new input message (check after): insertMessage"
+     r1 <- newIORef False
      r2 <- newIORef False
      let item = InputMessageQueueItem m r1 r2
      vectorInsert (inputMessages q) i item
