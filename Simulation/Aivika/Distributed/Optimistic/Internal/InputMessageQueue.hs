@@ -246,6 +246,9 @@ annihilateMessage q m i =
      let m' = itemMessage item
      unless (antiMessages m m') $
        error "Cannot annihilate another message: annihilateMessage"
+     f <- readIORef (itemProcessed item)
+     when f $
+       error "Cannot annihilate the processed message: annihilateMessage"
      vectorDeleteAt (inputMessages q) i
      writeIORef (itemAnnihilated item) True
 
