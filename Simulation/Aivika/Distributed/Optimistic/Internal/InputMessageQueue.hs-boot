@@ -13,6 +13,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
         inputMessageQueueSize,
+        inputMessageQueueVersion,
         enqueueMessage,
         messageEnqueued,
         retryInputMessages,
@@ -36,6 +37,8 @@ newInputMessageQueue :: UndoableLog
                         -> DIO InputMessageQueue
 
 inputMessageQueueSize :: InputMessageQueue -> IO Int
+
+inputMessageQueueVersion :: InputMessageQueue -> IO Int
 
 enqueueMessage :: InputMessageQueue -> Message -> TimeWarp DIO ()
 

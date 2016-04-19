@@ -540,9 +540,9 @@ runTimeWarp :: TimeWarp DIO () -> Event DIO Bool
 runTimeWarp m =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     v0 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
+     v0 <- liftIOUnsafe $ inputMessageQueueVersion (queueInputMessages q)
      invokeTimeWarp p m
-     v2 <- liftIOUnsafe $ logRollbackVersion (queueLog q)
+     v2 <- liftIOUnsafe $ inputMessageQueueVersion (queueInputMessages q)
      return (v0 == v2)
 
 -- | Synchronize the events.

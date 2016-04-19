@@ -13,6 +13,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
        (InputMessageQueue,
         newInputMessageQueue,
         inputMessageQueueSize,
+        inputMessageQueueVersion,
         enqueueMessage,
         messageEnqueued,
         retryInputMessages,
@@ -56,8 +57,10 @@ data InputMessageQueue =
                       -- ^ The message source.
                       inputMessages :: Vector InputMessageQueueItem,
                       -- ^ The input messages.
-                      inputMessageActions :: IORef [Event DIO ()]
+                      inputMessageActions :: IORef [Event DIO ()],
                       -- ^ The list of actions to perform.
+                      inputMessageVersionRef :: IORef Int
+                      -- ^ The number of reversions.
                     }
 
 -- | Specified the input message queue item.
@@ -84,17 +87,23 @@ newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
   do ms <- liftIOUnsafe newVector
      r  <- liftIOUnsafe $ newIORef []
      s  <- newSignalSource0
+     v  <- liftIOUnsafe $ newIORef 0
      return InputMessageQueue { inputMessageLog = log,
                                 inputMessageRollbackPre = rollbackPre,
                                 inputMessageRollbackPost = rollbackPost,
                                 inputMessageRollbackTime = rollbackTime,
                                 inputMessageSource = s,
                                 inputMessages = ms,
-                                inputMessageActions = r }
+                                inputMessageActions = r,
+                                inputMessageVersionRef = v }
 
 -- | Return the input message queue size.
 inputMessageQueueSize :: InputMessageQueue -> IO Int
 inputMessageQueueSize = vectorCount . inputMessages
+
+-- | Return the reversion count.
+inputMessageQueueVersion :: InputMessageQueue -> IO Int
+inputMessageQueueVersion = readIORef . inputMessageVersionRef
 
 -- | Return a complement.
 complement :: Int -> Int
@@ -115,6 +124,8 @@ enqueueMessage q m =
        Nothing -> return ()
        Just i | i >= 0 ->
          do -- found the anti-message at the specified index
+            when (t <= t0) $
+              liftIOUnsafe $ modifyIORef' (inputMessageVersionRef q) (+ 1)
             item <- liftIOUnsafe $ readVector (inputMessages q) i
             f <- liftIOUnsafe $ readIORef (itemProcessed item)
             if f
@@ -128,6 +139,8 @@ enqueueMessage q m =
               else liftIOUnsafe $ annihilateMessage q m i
        Just i' | i' < 0 ->
          do -- insert the message at the specified right index
+            when (t < t0) $
+              liftIOUnsafe $ modifyIORef' (inputMessageVersionRef q) (+ 1)
             let i = complement i'
             if t < t0
               then do let p' = pastPoint t p
@@ -154,6 +167,8 @@ retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
 retryInputMessages q =
   TimeWarp $ \p ->
   do let t = pointTime p
+     liftIOUnsafe $
+       modifyIORef' (inputMessageVersionRef q) (+ 1)
      invokeEvent p $
        rollbackInputMessages q t True $
        return ()

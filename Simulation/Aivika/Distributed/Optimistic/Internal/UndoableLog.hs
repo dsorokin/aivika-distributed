@@ -15,8 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
         writeLog,
         rollbackLog,
         reduceLog,
-        logSize,
-        logRollbackVersion) where
+        logSize) where
 
 import Data.IORef
 
@@ -33,10 +32,8 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 
 -- | Specified an undoable log with ability to rollback the operations.
 data UndoableLog =
-  UndoableLog { logItems :: DLL.DoubleLinkedList UndoableItem,
+  UndoableLog { logItems :: DLL.DoubleLinkedList UndoableItem
                 -- ^ The items that can be undone.
-                logRollbackVersionRef :: IORef Int
-                -- ^ The version of the rollback.
               }
 
 data UndoableItem =
@@ -50,9 +47,7 @@ data UndoableItem =
 newUndoableLog :: DIO UndoableLog
 newUndoableLog =
   do xs <- liftIOUnsafe DLL.newList
-     v  <- liftIOUnsafe $ newIORef 0
-     return UndoableLog { logItems = xs,
-                          logRollbackVersionRef = v }
+     return UndoableLog { logItems = xs }
 
 -- | Write a new undoable operation.
 writeLog :: UndoableLog -> DIO () -> Event DIO ()
@@ -78,8 +73,7 @@ writeLog log h =
 -- | Rollback the log till the specified time either including that one or not.
 rollbackLog :: UndoableLog -> Double -> Bool -> DIO ()
 rollbackLog log t including =
-  do liftIOUnsafe $ modifyIORef' (logRollbackVersionRef log) (+ 1)
-     ---
+  do ---
      logDIO DEBUG $ "Rolling the log back to t = " ++ show t
      ---
      loop
@@ -106,7 +100,3 @@ reduceLog log t =
 -- | Return the log size.
 logSize :: UndoableLog -> IO Int
 logSize log = DLL.listCount (logItems log)
-
--- | Return the rolback version.
-logRollbackVersion :: UndoableLog -> IO Int
-logRollbackVersion = readIORef . logRollbackVersionRef
