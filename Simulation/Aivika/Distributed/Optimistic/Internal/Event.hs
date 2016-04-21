@@ -15,7 +15,6 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
-        retryEvent,
         syncEvent) where
 
 import Data.Maybe
@@ -214,7 +213,7 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
                            invokeEvent p2 $ R.modifyRef pq PQ.dequeue
                            catchComp
                              (c2 p2)
-                             (\RetryEvent -> invokeEvent p2 handleEventRetry) 
+                             (\e@(SimulationRetry _) -> invokeEvent p2 $ handleEventRetry e) 
                            call q p p2
 
 -- | Process the pending events synchronously, i.e. without past.
@@ -572,23 +571,9 @@ syncEvent t h =
      when ok $
        invokeEvent p h
 
--- | An exception that signals of retrying the 'Event' computation.
-data RetryEvent = RetryEvent
-                  -- ^ The exception to retry the computation.
-                deriving (Show, Typeable)
-
-instance Exception RetryEvent where
-  
-  toException = toException . SomeException
-  fromException x = do { SomeException a <- fromException x; cast a }
-
--- | Retry the 'Event' computation waiting for arriving other messages.
-retryEvent :: Event DIO a
-retryEvent = throwEvent RetryEvent
-
 -- | Handle the 'Event' retry.
-handleEventRetry :: Event DIO ()
-handleEventRetry =
+handleEventRetry :: SimulationRetry -> Event DIO ()
+handleEventRetry e =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
          t = pointTime p
@@ -629,5 +614,7 @@ handleEventRetry =
                 case f of
                   Just _  -> loop
                   Nothing ->
-                    error "Detected a deadlock when retrying the computations: handleEventRetry"
+                    error $
+                    "Detected a deadlock when retrying the computations: handleEventRetry\n" ++
+                    "--- the nested exception ---\n" ++ show e 
      loop
