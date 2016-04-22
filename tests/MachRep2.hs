@@ -168,12 +168,9 @@ masterModel count =
 
      runEventInStartTime $
        handleSignal messageReceived $ \(ReleaseRepairPerson senderId) ->
-       do n <- resourceCount repairPerson
-          if n >= maxRepairPersonCount
-            then liftEvent retryEvent  -- N.B. retry the computation as the order is incorrect!
-            else do t <- liftDynamics time
-                    releaseResourceWithinEvent repairPerson
-                    enqueueMessage senderId (t + delta) (ReleaseRepairPersonResp inboxId)
+       do t <- liftDynamics time
+          releaseResourceWithinEvent repairPerson
+          enqueueMessage senderId (t + delta) (ReleaseRepairPersonResp inboxId)
           
      let upTimeProp =
            do x <- readRef totalUpTime
@@ -196,7 +193,7 @@ runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Pr
 runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = NOTICE }
+    ps = defaultDIOParams { dioLoggingPriority = DEBUG }
     m  = do runSimulation (slaveModel masterId) specs
             unregisterDIO
 
@@ -206,20 +203,21 @@ runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (D
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = NOTICE }
+    ps = defaultDIOParams { dioLoggingPriority = DEBUG }
     m  = do a <- runSimulation (masterModel n) specs
             terminateDIO
             return a
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
+     let n = 2
      timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
      -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
-     (masterId, masterProcess) <- runMasterModel timeServerId 2
+     (masterId, masterProcess) <- runMasterModel timeServerId n
      -- (masterId, masterProcess) <- runMasterModel timeServerId (length nodes)
      -- forM_ nodes $ \node ->
      --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
-     forM_ [1..2] $ \i ->
+     forM_ [1..n] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
           DP.spawnLocal slaveProcess
      a <- masterProcess
