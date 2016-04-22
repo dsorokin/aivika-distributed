@@ -318,6 +318,22 @@ processChannelMessage x@(QueueMessage m) =
             else error "Received the outdated message: processChannelMessage"
      invokeTimeWarp p $
        enqueueMessage (queueInputMessages q) m
+processChannelMessage x@(QueueMessageBulk ms) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     invokeEvent p $
+       logMessage x
+     ---
+     t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+     forM_ ms $ \m ->
+       do when (messageReceiveTime m < t0) $
+            do f <- fmap dioAllowProcessingOutdatedMessage dioParams
+               if f
+                 then invokeEvent p logOutdatedMessage
+                 else error "Received the outdated message: processChannelMessage"
+          invokeTimeWarp p $
+            enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(GlobalTimeMessage globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -368,17 +384,34 @@ updateGlobalTime t =
                invokeEvent p $
                  reduceEvents t
 
+-- | Show the message.
+showMessage :: Message -> ShowS
+showMessage m =
+  showString "{ " .
+  showString "sendTime = " .
+  shows (messageSendTime m) .
+  showString ", receiveTime = " .
+  shows (messageReceiveTime m) .
+  (if messageAntiToggle m
+   then showString ", antiToggle = True"
+   else showString "") .
+  showString " }"
+
 -- | Log the message at the specified time.
 logMessage :: LocalProcessMessage -> Event DIO ()
 logMessage (QueueMessage m) =
   Event $ \p ->
   logDIO INFO $
   "t = " ++ (show $ pointTime p) ++
-  ": QueueMessage { " ++
-  "sendTime = " ++ (show $ messageSendTime m) ++
-  ", receiveTime = " ++ (show $ messageReceiveTime m) ++
-  (if messageAntiToggle m then ", antiToggle = True" else "") ++
-  " }"
+  ": QueueMessage " ++
+  showMessage m []
+logMessage (QueueMessageBulk ms) =
+  Event $ \p ->
+  logDIO INFO $
+  "t = " ++ (show $ pointTime p) ++
+  ": QueueMessageBulk [ " ++
+  let fs = foldl1 (\a b -> a . showString ", " . b) $ map showMessage ms
+  in fs [] ++ " ]" 
 logMessage m =
   Event $ \p ->
   logDIO DEBUG $

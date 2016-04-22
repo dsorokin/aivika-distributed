@@ -18,6 +18,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
         reduceOutputMessages,
         generateMessageSequenceNo) where
 
+import Data.List
 import Data.IORef
 
 import Control.Monad
@@ -74,7 +75,8 @@ sendMessage q m =
 rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
 rollbackOutputMessages q t including =
   do ms <- liftIOUnsafe $ extractMessagesToRollback q t including
-     forM_ ms (deliverAntiMessage . antiMessage)
+     deliverAntiMessages $ map antiMessage ms
+     -- forM_ ms $ deliverAntiMessage . antiMessage
                  
 -- | Return the messages to roolback by the specified time.
 extractMessagesToRollback :: OutputMessageQueue -> Double -> Bool -> IO [Message]
@@ -121,3 +123,13 @@ deliverAntiMessage :: Message -> DIO ()
 deliverAntiMessage x =
   liftDistributedUnsafe $
   DP.send (messageReceiverId x) (QueueMessage x)
+
+-- | Deliver the anti-messages on low level.
+deliverAntiMessages :: [Message] -> DIO ()
+deliverAntiMessages xs =
+  let ys = groupBy (\a b -> messageReceiverId a == messageReceiverId b) xs
+      dlv []         = return ()
+      dlv zs@(z : _) =
+        liftDistributedUnsafe $
+        DP.send (messageReceiverId z) (QueueMessageBulk zs)
+  in forM_ ys dlv

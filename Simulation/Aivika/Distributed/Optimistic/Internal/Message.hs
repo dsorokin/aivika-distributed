@@ -72,14 +72,16 @@ instance Eq Message where
 
 -- | The message sent to the local process.
 data LocalProcessMessage = QueueMessage Message
-                            -- ^ the message has come from the remote process
-                          | GlobalTimeMessage (Maybe Double)
-                            -- ^ the time server sent a global time
-                          | LocalTimeMessageResp Double
-                            -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
-                          | TerminateLocalProcessMessage
-                            -- ^ the time server asked to terminate the process
-                          deriving (Eq, Show, Typeable, Generic)
+                           -- ^ the message has come from the remote process
+                         | QueueMessageBulk [Message]
+                           -- ^ a bulk of messages that have come from the remote process
+                         | GlobalTimeMessage (Maybe Double)
+                           -- ^ the time server sent a global time
+                         | LocalTimeMessageResp Double
+                           -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
+                         | TerminateLocalProcessMessage
+                           -- ^ the time server asked to terminate the process
+                         deriving (Eq, Show, Typeable, Generic)
 
 instance Binary LocalProcessMessage
 
