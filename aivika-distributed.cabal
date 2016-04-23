@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         0.1
+version:         0.1.1
 synopsis:        Parallel distributed simulation library
 description:
     This package extends the Aivika library with facilities for running parallel distributed simulations.
