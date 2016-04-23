@@ -52,7 +52,7 @@ library
                      binary >= 0.6.4.0,
                      time >= 1.5.0.1,
                      containers >= 0.4.0.0,
-                     exceptions >= 0.8.2.1,
+                     exceptions >= 0.8.0.2,
                      distributed-process >= 0.6.1,
                      aivika >= 4.3.4,
                      aivika-transformers >= 4.3.4

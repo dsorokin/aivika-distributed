@@ -20,6 +20,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
 import Data.Maybe
 import Data.IORef
 import Data.Typeable
+import Data.Time.Clock
 
 import System.Timeout
 
@@ -45,6 +46,10 @@ import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMe
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref as R
 
+-- | Convert microseconds to seconds.
+microsecondsToSeconds :: Int -> Rational
+microsecondsToSeconds x = 1000000.0 * (fromInteger $ toInteger x)
+
 -- | An implementation of the 'EventQueueing' type class.
 instance EventQueueing DIO where
 
@@ -62,8 +67,16 @@ instance EventQueueing DIO where
                  -- ^ whether the queue is currently processing events
                  queueTime :: IORef Double,
                  -- ^ the actual time of the event queue
-                 queueGlobalTime :: IORef Double
+                 queueGlobalTime :: IORef Double,
                  -- ^ the global time
+                 queueLocalTime :: IORef Double,
+                 -- ^ the long-term queue local time
+                 queueLocalTime0 :: IORef Double,
+                 -- ^ the short-term queue local time
+                 queueLocalTimeTimestamp :: IORef UTCTime,
+                 -- ^ the queue local time timestamp
+                 queueLocalTimeInterval :: NominalDiffTime
+                 -- ^ the queue local time interval for updating
                }
 
   newEventQueue specs =
@@ -74,13 +87,21 @@ instance EventQueueing DIO where
        log <- newUndoableLog
        output <- newOutputMessageQueue
        input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
+       loct <- liftIOUnsafe $ newIORef $ spcStartTime specs
+       loct0 <- liftIOUnsafe $ newIORef $ spcStartTime specs
+       loctstamp <- liftIOUnsafe $ getCurrentTime >>= newIORef
+       locdt <- fmap (fromRational . microsecondsToSeconds . dioSyncTimeout) dioParams 
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueLog  = log,
                            queuePQ   = pq,
                            queueBusy = f,
                            queueTime = t,
-                           queueGlobalTime = gt }
+                           queueGlobalTime = gt,
+                           queueLocalTime = loct,
+                           queueLocalTime0 = loct0,
+                           queueLocalTimeTimestamp = loctstamp,
+                           queueLocalTimeInterval = locdt }
 
   enqueueEvent t (Event m) =
     Event $ \p ->
@@ -259,12 +280,11 @@ isEventOverflow =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      n1 <- liftIOUnsafe $ logSize (queueLog q)
-     n3 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
+     n2 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
      ps <- dioParams
      let th1 = dioUndoableLogSizeThreshold ps
-         th2 = dioInputMessageQueueIndexThreshold ps
-         th3 = dioOutputMessageQueueSizeThreshold ps
-     if (n1 >= th1) || (n3 >= th3)
+         th2 = dioOutputMessageQueueSizeThreshold ps
+     if (n1 >= th1) || (n2 >= th2)
        then do logDIO NOTICE $
                  "t = " ++ (show $ pointTime p) ++
                  ": detected the event overflow"
@@ -280,7 +300,7 @@ throttleMessageChannel =
      receiver <- timeServerId
      liftDistributedUnsafe $
        DP.send receiver (LocalTimeMessage sender $ pointTime p)
-     dt <- fmap dioTimeServerMessageTimeout dioParams
+     dt <- fmap dioSyncTimeout dioParams
      liftIOUnsafe $
        timeout dt $ awaitChannel ch
      invokeTimeWarp p $ processChannelMessages
@@ -526,7 +546,7 @@ syncLocalTime m =
                     invokeEvent p logSyncLocalTime
                     ---
                     ch <- messageChannel
-                    dt <- fmap dioTimeServerMessageTimeout dioParams
+                    dt <- fmap dioSyncTimeout dioParams
                     f  <- liftIOUnsafe $
                           timeout dt $ awaitChannel ch
                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
@@ -555,7 +575,7 @@ syncLocalTime0 m =
                     invokeEvent p logSyncLocalTime0
                     ---
                     ch <- messageChannel
-                    dt <- fmap dioTimeServerMessageTimeout dioParams
+                    dt <- fmap dioSyncTimeout dioParams
                     f  <- liftIOUnsafe $
                           timeout dt $ awaitChannel ch
                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
@@ -624,7 +644,7 @@ handleEventRetry e =
                 ": waiting for arriving a message..."
               ---
               ch <- messageChannel
-              dt <- fmap dioTimeServerMessageTimeout dioParams
+              dt <- fmap dioSyncTimeout dioParams
               f  <- liftIOUnsafe $
                     timeout dt $ awaitChannel ch
               ok <- invokeEvent p $ runTimeWarp processChannelMessages
@@ -639,7 +659,7 @@ handleEventRetry e =
                 ": waiting for arriving a message in ring 0..."
               ---
               ch <- messageChannel
-              dt <- fmap dioTimeServerMessageTimeout dioParams
+              dt <- fmap dioSyncTimeout dioParams
               f  <- liftIOUnsafe $
                     timeout dt $ awaitChannel ch
               ok <- invokeEvent p $ runTimeWarp processChannelMessages

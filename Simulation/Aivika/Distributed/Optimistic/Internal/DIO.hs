@@ -52,12 +52,10 @@ data DIOParams =
               -- ^ The logging priority
               dioUndoableLogSizeThreshold :: Int,
               -- ^ The undoable log size threshold used for detecting an overflow
-              dioInputMessageQueueIndexThreshold :: Int,
-              -- ^ The input message queue index threshold used for detecting an overflow
               dioOutputMessageQueueSizeThreshold :: Int,
               -- ^ The output message queue size threshold used for detecting an overflow
-              dioTimeServerMessageTimeout :: Int,
-              -- ^ The timeout in microseconds after which a new message is sent to the time server again
+              dioSyncTimeout :: Int,
+              -- ^ The timeout in microseconds used for synchronising the operations.
               dioAllowPrematureIO :: Bool,
               -- ^ Whether to allow performing the premature IO action; otherwise, raise an error
               dioAllowProcessingOutdatedMessage :: Bool
@@ -131,9 +129,8 @@ defaultDIOParams :: DIOParams
 defaultDIOParams =
   DIOParams { dioLoggingPriority = DEBUG,
               dioUndoableLogSizeThreshold = 500000,
-              dioInputMessageQueueIndexThreshold = 10000,
               dioOutputMessageQueueSizeThreshold = 10000,
-              dioTimeServerMessageTimeout = 5000000,
+              dioSyncTimeout = 5000000,
               dioAllowPrematureIO = False,
               dioAllowProcessingOutdatedMessage = False
             }
