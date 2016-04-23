@@ -143,8 +143,8 @@ rollbackEventTime =
   do let q = runEventQueue $ pointRun p
          t = pointTime p
      ---
-     logDIO DEBUG $
-       "Setting the queue time = " ++ show t
+     --- logDIO DEBUG $
+     ---   "Setting the queue time = " ++ show t
      ---
      liftIOUnsafe $
        do writeIORef (queueTime q) t
@@ -153,8 +153,8 @@ rollbackEventTime =
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      when (t0 > t) $
        do ---
-          logDIO DEBUG $
-            "Setting the global time = " ++ show t
+          --- logDIO DEBUG $
+          ---   "Setting the global time = " ++ show t
           ---
           liftIOUnsafe $ writeIORef (queueGlobalTime q) t
           invokeEvent p sendLocalTime
@@ -227,12 +227,12 @@ processPendingEventsCore includingCurrentEvents = Dynamics r where
                                         pointIteration = n2,
                                         pointPhase = -1 }
                            ---
-                           ps <- dioParams
-                           when (dioLoggingPriority ps <= DEBUG) $
-                             invokeEvent p2 $
-                             writeLog (queueLog q) $
-                             logDIO DEBUG $
-                             "Reverting the queue time " ++ show t2 ++ " --> " ++ show t'
+                           --- ps <- dioParams
+                           --- when (dioLoggingPriority ps <= DEBUG) $
+                           ---   invokeEvent p2 $
+                           ---   writeLog (queueLog q) $
+                           ---   logDIO DEBUG $
+                           ---   "Reverting the queue time " ++ show t2 ++ " --> " ++ show t'
                            ---
                            liftIOUnsafe $ writeIORef t t2
                            invokeEvent p2 $ R.modifyRef pq PQ.dequeue
@@ -329,8 +329,8 @@ processChannelMessage x@(QueueMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
-     invokeEvent p $
-       logMessage x
+     --- invokeEvent p $
+     ---   logMessage x
      ---
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      when (messageReceiveTime m < t0) $
@@ -344,8 +344,8 @@ processChannelMessage x@(QueueMessageBulk ms) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
-     invokeEvent p $
-       logMessage x
+     --- invokeEvent p $
+     ---   logMessage x
      ---
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      forM_ ms $ \m ->
@@ -360,8 +360,8 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
-     invokeEvent p $
-       logMessage x
+     --- invokeEvent p $
+     ---   logMessage x
      ---
      case globalTime of
        Nothing -> return ()
@@ -378,16 +378,16 @@ processChannelMessage x@(LocalTimeMessageResp globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
-     invokeEvent p $
-       logMessage x
+     --- invokeEvent p $
+     ---   logMessage x
      ---
      invokeEvent p $
        updateGlobalTime globalTime
 processChannelMessage x@TerminateLocalProcessMessage =
   TimeWarp $ \p ->
   do ---
-     invokeEvent p $
-       logMessage x
+     --- invokeEvent p $
+     ---   logMessage x
      ---
      liftDistributedUnsafe $
        DP.terminate
@@ -514,7 +514,7 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
          else do f <- fmap dioAllowPrematureIO dioParams
                  if f
                    then do ---
-                           invokeEvent p $ logPrematureIO
+                           --- invokeEvent p $ logPrematureIO
                            ---
                            liftIOUnsafe m
                    else error $
@@ -531,7 +531,7 @@ updateLocalTime =
      let dt = queueLocalTimeInterval q
      if timestamp >= addUTCTime dt timestamp0
        then do ---
-               logDIO DEBUG $ "t = " ++ (show $ pointTime p) ++ ": updating the local time"
+               --- logDIO DEBUG $ "t = " ++ (show $ pointTime p) ++ ": updating the local time"
                ---
                liftIOUnsafe $
                  do t <- readIORef (queueTime q)
@@ -554,7 +554,7 @@ sendLocalTime :: Event DIO ()
 sendLocalTime =
   Event $ \p ->
   do ---
-     invokeEvent p logSendLocalTime
+     --- invokeEvent p logSendLocalTime
      ---
      invokeEvent p updateLocalTime
      t <- invokeEvent p getLocalTime
@@ -576,7 +576,7 @@ syncLocalTime m =
        else if t == spcStartTime (pointSpecs p)
             then return ()
             else do ---
-                    invokeEvent p logSyncLocalTime
+                    --- invokeEvent p logSyncLocalTime
                     ---
                     ch <- messageChannel
                     dt <- fmap dioSyncTimeout dioParams
@@ -608,7 +608,7 @@ syncLocalTime0 m =
        else if t' == pointTime p
             then return ()
             else do ---
-                    invokeEvent p logSyncLocalTime0
+                    --- invokeEvent p logSyncLocalTime0
                     ---
                     ch <- messageChannel
                     dt <- fmap dioSyncTimeout dioParams
@@ -675,9 +675,9 @@ handleEventRetry e =
        retryInputMessages (queueInputMessages q)
      let loop =
            do ---
-              logDIO DEBUG $
-                "t = " ++ show t ++
-                ": waiting for arriving a message..."
+              --- logDIO DEBUG $
+              ---   "t = " ++ show t ++
+              ---   ": waiting for arriving a message..."
               ---
               ch <- messageChannel
               dt <- fmap dioSyncTimeout dioParams
@@ -690,9 +690,9 @@ handleEventRetry e =
                   Nothing -> loop0
          loop0 =
            do ---
-              logDIO DEBUG $
-                "t = " ++ show t ++
-                ": waiting for arriving a message in ring 0..."
+              --- logDIO DEBUG $
+              ---   "t = " ++ show t ++
+              ---   ": waiting for arriving a message in ring 0..."
               ---
               ch <- messageChannel
               dt <- fmap dioSyncTimeout dioParams

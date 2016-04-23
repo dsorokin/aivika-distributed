@@ -56,7 +56,7 @@ writeLog log h =
   Event $ \p ->
   do let x = UndoableItem { itemTime = pointTime p, itemUndo = h }
      ---
-     logDIO DEBUG $ "Writing the log at t = " ++ show (itemTime x)
+     --- logDIO DEBUG $ "Writing the log at t = " ++ show (itemTime x)
      ---
      liftIOUnsafe $
        do f <- DLL.listNull (logItems log)
@@ -74,7 +74,7 @@ writeLog log h =
 rollbackLog :: UndoableLog -> Double -> Bool -> DIO ()
 rollbackLog log t including =
   do ---
-     logDIO DEBUG $ "Rolling the log back to t = " ++ show t
+     --- logDIO DEBUG $ "Rolling the log back to t = " ++ show t
      ---
      loop
        where
