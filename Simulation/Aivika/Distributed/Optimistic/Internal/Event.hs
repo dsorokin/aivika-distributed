@@ -123,23 +123,23 @@ instance EventQueueing DIO where
        fmap PQ.queueCount $ R.readRef pq
 
 -- | The first stage of rolling the changes back.
-rollbackEventPre :: Double -> Bool -> Event DIO ()
-rollbackEventPre t including =
-  Event $ \p ->
+rollbackEventPre :: Bool -> TimeWarp DIO ()
+rollbackEventPre including =
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
-     rollbackLog (queueLog q) t including
+     rollbackLog (queueLog q) (pointTime p) including
 
 -- | The post stage of rolling the changes back.
-rollbackEventPost :: Double -> Bool -> Event DIO ()
-rollbackEventPost t including =
-  Event $ \p ->
+rollbackEventPost :: Bool -> TimeWarp DIO ()
+rollbackEventPost including =
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
-     rollbackOutputMessages (queueOutputMessages q) t including
+     rollbackOutputMessages (queueOutputMessages q) (pointTime p) including
 
 -- | Rollback the event time.
-rollbackEventTime :: Double -> Event DIO ()
-rollbackEventTime t =
-  Event $ \p ->
+rollbackEventTime :: TimeWarp DIO ()
+rollbackEventTime =
+  TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
      logDIO DEBUG $
@@ -147,7 +147,7 @@ rollbackEventTime t =
      ---
      liftIOUnsafe $ writeIORef (queueTime q) (pointTime p)
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     when (t0 > t) $
+     when (t0 > pointTime p) $
        do ---
           logDIO DEBUG $
             "Setting the global time = " ++ show (pointTime p)

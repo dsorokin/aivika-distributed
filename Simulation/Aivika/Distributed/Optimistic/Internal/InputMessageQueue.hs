@@ -47,11 +47,11 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 data InputMessageQueue =
   InputMessageQueue { inputMessageLog :: UndoableLog,
                       -- ^ the Redo/Undo log.
-                      inputMessageRollbackPre :: Double -> Bool -> Event DIO (),
+                      inputMessageRollbackPre :: Bool -> TimeWarp DIO (),
                       -- ^ Rollback the operations till the specified time before actual changes either including the time or not.
-                      inputMessageRollbackPost :: Double -> Bool -> Event DIO (),
+                      inputMessageRollbackPost :: Bool -> TimeWarp DIO (),
                       -- ^ Rollback the operations till the specified time after actual changes either including the time or not.
-                      inputMessageRollbackTime :: Double -> Event DIO (),
+                      inputMessageRollbackTime :: TimeWarp DIO (),
                       -- ^ Rollback the event time.
                       inputMessageSource :: SignalSource DIO Message,
                       -- ^ The message source.
@@ -76,11 +76,11 @@ data InputMessageQueueItem =
 -- | Create a new input message queue.
 newInputMessageQueue :: UndoableLog
                         -- ^ the Redo/Undo log
-                        -> (Double -> Bool -> Event DIO ())
+                        -> (Bool -> TimeWarp DIO ())
                         -- ^ rollback operations till the specified time before actual changes either including the time or not
-                        -> (Double -> Bool -> Event DIO ())
+                        -> (Bool -> TimeWarp DIO ())
                         -- ^ rollback operations till the specified time after actual changes either including the time or not
-                        -> (Double -> Event DIO ())
+                        -> TimeWarp DIO ()
                         -- ^ rollback the event time
                         -> DIO InputMessageQueue
 newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
@@ -131,11 +131,11 @@ enqueueMessage q m =
             if f
               then do let p' = pastPoint t p
                       logRollbackInputMessages t0 t True
-                      invokeEvent p' $
-                        rollbackInputMessages q t True $
+                      invokeTimeWarp p' $
+                        rollbackInputMessages q True $
                         liftIOUnsafe $ annihilateMessage q m i
-                      invokeEvent p' $
-                        inputMessageRollbackTime q t
+                      invokeTimeWarp p' $
+                        inputMessageRollbackTime q
               else liftIOUnsafe $ annihilateMessage q m i
        Just i' | i' < 0 ->
          do -- insert the message at the specified right index
@@ -145,13 +145,13 @@ enqueueMessage q m =
             if t < t0
               then do let p' = pastPoint t p
                       logRollbackInputMessages t0 t False
-                      invokeEvent p' $
-                        rollbackInputMessages q t False $
+                      invokeTimeWarp p' $
+                        rollbackInputMessages q False $
                         Event $ \p' ->
                         do liftIOUnsafe $ insertMessage q m i
                            invokeEvent p' $ activateMessage q i
-                      invokeEvent p' $
-                        inputMessageRollbackTime q t
+                      invokeTimeWarp p' $
+                        inputMessageRollbackTime q
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
 
@@ -166,28 +166,27 @@ logRollbackInputMessages t0 t including =
 retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
 retryInputMessages q =
   TimeWarp $ \p ->
-  do let t = pointTime p
-     liftIOUnsafe $
+  do liftIOUnsafe $
        modifyIORef' (inputMessageVersionRef q) (+ 1)
-     invokeEvent p $
-       rollbackInputMessages q t True $
+     invokeTimeWarp p $
+       rollbackInputMessages q True $
        return ()
-     invokeEvent p $
-       inputMessageRollbackTime q t
+     invokeTimeWarp p $
+       inputMessageRollbackTime q
 
 -- | Rollback the input messages till the specified time, either including the time or not, and apply the given computation.
-rollbackInputMessages :: InputMessageQueue -> Double -> Bool -> Event DIO () -> Event DIO ()
-rollbackInputMessages q t including m =
-  Event $ \p ->
+rollbackInputMessages :: InputMessageQueue -> Bool -> Event DIO () -> TimeWarp DIO ()
+rollbackInputMessages q including m =
+  TimeWarp $ \p ->
   do liftIOUnsafe $
        requireEmptyMessageActions q
-     invokeEvent p $
-       inputMessageRollbackPre q t including
+     invokeTimeWarp p $
+       inputMessageRollbackPre q including
      invokeEvent p m
      invokeEvent p $
        performMessageActions q
-     invokeEvent p $
-       inputMessageRollbackPost q t including
+     invokeTimeWarp p $
+       inputMessageRollbackPost q including
 
 -- | Return the point in the past.
 pastPoint :: Double -> Point DIO -> Point DIO
