@@ -573,7 +573,7 @@ syncLocalTime m =
      t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      if t' > t
        then error "Inconsistent time: syncLocalTime"
-       else if t == spcStartTime (pointSpecs p)
+       else if (t == spcStartTime (pointSpecs p)) || (t' == pointTime p)
             then return ()
             else do ---
                     --- invokeEvent p logSyncLocalTime
