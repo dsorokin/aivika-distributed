@@ -42,7 +42,7 @@ meanUpTime = 1.0
 meanRepairTime = 0.5
 
 specs = Specs { spcStartTime = 0.0,
-                spcStopTime = 100.0,
+                spcStopTime = 1000.0,
                 spcDT = 1.0,
                 spcMethod = RungeKutta4,
                 spcGeneratorType = SimpleGenerator }
@@ -193,7 +193,7 @@ runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Pr
 runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = DEBUG }
+    ps = defaultDIOParams { dioLoggingPriority = WARNING }
     m  = do runSimulation (slaveModel masterId) specs
             unregisterDIO
 
@@ -203,7 +203,7 @@ runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (D
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = DEBUG }
+    ps = defaultDIOParams { dioLoggingPriority = WARNING }
     m  = do a <- runSimulation (masterModel n) specs
             terminateDIO
             return a
