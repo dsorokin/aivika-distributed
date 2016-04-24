@@ -68,7 +68,7 @@ data LocalProcessInfo =
 -- | The default time server parameters.
 defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
-  TimeServerParams { tsLoggingPriority = DEBUG,
+  TimeServerParams { tsLoggingPriority = WARNING,
                      tsExpectTimeout = 1000,
                      tsTimeSyncDelay = 1000
                    }
