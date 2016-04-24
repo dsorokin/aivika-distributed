@@ -233,8 +233,9 @@ runMasterModel timeServerId n =
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let [n0, n1, n2] = nodes
-     -- timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     timeServerId <- DP.spawn n0 ($(mkClosure 'timeServer) defaultTimeServerParams)
+         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+     -- timeServerId <- DP.spawnLocal $ timeServer timeServerParams
+     timeServerId <- DP.spawn n0 ($(mkClosure 'timeServer) timeServerParams)
      -- (masterId, masterProcess) <- runMasterModel timeServerId 2
      -- forM_ [1..2] $ \i ->
      --   do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
