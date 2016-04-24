@@ -20,8 +20,6 @@
 -- that a given machine does not have immediate access to the repairperson 
 -- when the machine breaks down. Output values should be about 0.6 and 0.67. 
 
--- import System.Environment (getArgs)
-
 import Data.Typeable
 import Data.Binary
 
@@ -197,8 +195,6 @@ runSlaveModel (timeServerId, masterId) =
     m  = do runSimulation (slaveModel masterId) specs
             unregisterDIO
 
--- remotable ['runSlaveModel, 'timeServer]
-
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (Double, Double))
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
@@ -211,12 +207,9 @@ runMasterModel timeServerId n =
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let n = 2
-     timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
+         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+     timeServerId <- DP.spawnLocal $ timeServer timeServerParams
      (masterId, masterProcess) <- runMasterModel timeServerId n
-     -- (masterId, masterProcess) <- runMasterModel timeServerId (length nodes)
-     -- forM_ nodes $ \node ->
-     --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..n] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
           DP.spawnLocal slaveProcess

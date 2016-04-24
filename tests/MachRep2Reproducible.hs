@@ -20,8 +20,6 @@
 -- that a given machine does not have immediate access to the repairperson 
 -- when the machine breaks down. Output values should be about 0.6 and 0.67. 
 
--- import System.Environment (getArgs)
-
 import Data.Typeable
 import Data.Binary
 
@@ -227,12 +225,9 @@ runMasterModel timeServerId n =
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let n = length seeds
-     timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
+         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+     timeServerId <- DP.spawnLocal $ timeServer timeServerParams
      (masterId, masterProcess) <- runMasterModel timeServerId n
-     -- (masterId, masterProcess) <- runMasterModel timeServerId (length nodes)
-     -- forM_ nodes $ \node ->
-     --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..n] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId, i)
           DP.spawnLocal slaveProcess

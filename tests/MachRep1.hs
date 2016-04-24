@@ -18,19 +18,6 @@
 -- Output is long-run proportion of up time. Should get value of about
 -- 0.66.
 
-{-
-ghc -threaded MachRep1Distributed.hs
-
-Fire up some slave nodes (for the example, we run them on a single machine):
-
-./MachRep1Distributed slave localhost 8080 &
-./MachRep1Distributed slave localhost 8081 &
-
-And start the master node:
-
-./MachRep1Distributed master localhost 8084
--}
-
 import System.Environment (getArgs)
 
 import Data.Typeable
@@ -115,8 +102,6 @@ runSlaveModel (timeServerId, masterId) =
     m  = do runSimulation (slaveModel masterId) specs
             unregisterDIO
 
--- remotable ['runSlaveModel, 'timeServer]
-
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process Double)
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
@@ -128,12 +113,9 @@ runMasterModel timeServerId n =
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     timeServerId <- DP.spawnLocal $ timeServer defaultTimeServerParams
-     -- timeServerId <- DP.spawn node1 ($(mkClosure 'timeServer) defaultTimeServerParams)
+     let timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+     timeServerId <- DP.spawnLocal $ timeServer timeServerParams
      (masterId, masterProcess) <- runMasterModel timeServerId 2
-     -- (masterId, masterProcess) <- runMasterModel timeServerId (length nodes)
-     -- forM_ nodes $ \node ->
-     --   DP.spawn node ($(mkClosure 'runSlaveModel) (timeServerId, masterId))
      forM_ [1..2] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
           DP.spawnLocal slaveProcess
@@ -145,14 +127,3 @@ main :: IO ()
 main = do
   backend <- initializeBackend "localhost" "8080" initRemoteTable
   startMaster backend (master backend)
-
--- main :: IO ()
--- main = do
---   args <- getArgs
---   case args of
---     ["master", host, port] -> do
---       backend <- initializeBackend host port initRemoteTable
---       startMaster backend (master backend)
---     ["slave", host, port] -> do
---       backend <- initializeBackend host port initRemoteTable
---       startSlave backend

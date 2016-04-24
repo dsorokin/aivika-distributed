@@ -78,7 +78,8 @@ runModel timeServerId =
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     timeServerId  <- DP.spawnLocal $ timeServer defaultTimeServerParams
+     let timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+     timeServerId  <- DP.spawnLocal $ timeServer timeServerParams
      runModel timeServerId
      liftIO $
        threadDelay 1000000
