@@ -21,6 +21,7 @@ extra-source-files:  tests/MachRep1.hs
                      tests/MachRep2.hs
                      tests/MachRep2Distributed.hs
                      tests/MachRep2Reproducible.hs
+                     tests/MachRep2Sync.hs
 
 library
 
