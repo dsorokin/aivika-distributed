@@ -127,7 +127,7 @@ liftDistributedUnsafe = DIO . const
 -- | The default parameters for the 'DIO' computation
 defaultDIOParams :: DIOParams
 defaultDIOParams =
-  DIOParams { dioLoggingPriority = DEBUG,
+  DIOParams { dioLoggingPriority = WARNING,
               dioUndoableLogSizeThreshold = 500000,
               dioOutputMessageQueueSizeThreshold = 10000,
               dioSyncTimeout = 5000000,
