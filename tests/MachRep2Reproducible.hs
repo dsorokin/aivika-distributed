@@ -237,5 +237,9 @@ master = \backend nodes ->
   
 main :: IO ()
 main = do
-  backend <- initializeBackend "localhost" "8080" initRemoteTable
+  backend <- initializeBackend "localhost" "8080" rtable
   startMaster backend (master backend)
+    where
+      rtable :: DP.RemoteTable
+      -- rtable = __remoteTable initRemoteTable
+      rtable = initRemoteTable
