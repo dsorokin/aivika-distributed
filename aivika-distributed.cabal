@@ -1,9 +1,11 @@
 name:            aivika-distributed
 version:         0.1.3
-synopsis:        Parallel distributed simulation library
+synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
-    This package extends the Aivika library with facilities for running parallel distributed simulations.
+    This package extends the aivika-transformers [1] package with facilities for running parallel distributed simulations.
     It uses an optimistic strategy known as the Time Warp method.
+    .
+    \[1] <http://hackage.haskell.org/package/aivika-transformers>
     .
 category:        Simulation
 license:         BSD3
