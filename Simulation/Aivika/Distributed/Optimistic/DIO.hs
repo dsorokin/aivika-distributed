@@ -49,13 +49,3 @@ instance MonadComp DIO
 
 instance {-# OVERLAPPING #-} MonadIO (Process DIO) where
   liftIO = liftEvent . liftIO
-
--- | 'DIO' is an instance of 'EventIOQueueing'.
-instance EventIOQueueing DIO where
-
-  enqueueEventIO t h = enqueueEvent t $ eventRollableBack h
-  enqueueEventIOWithStartTime = enqueueEventWithStartTime . eventRollableBack
-  enqueueEventIOWithStopTime = enqueueEventWithStopTime . eventRollableBack
-  enqueueEventIOWithIntegTimes = enqueueEventWithIntegTimes . eventRollableBack
-  enqueueEventIOWithTimes ts h = enqueueEventWithTimes ts $ eventRollableBack h
-

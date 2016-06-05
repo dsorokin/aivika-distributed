@@ -14,8 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
-        queueLog,
-        eventRollableBack) where
+        queueLog) where
 
 import Data.Maybe
 import Data.IORef
@@ -645,16 +644,18 @@ syncEvents processing =
        invokeEvent p $
        syncEvents processing
 
--- | Return an event computation that can be rolled back.
-eventRollableBack :: Event DIO () -> Event DIO ()
-eventRollableBack h =
-  Event $ \p ->
-  do ok <- invokeEvent p $
-           runTimeWarp $
-           syncLocalTime $
-           return ()
-     when ok $
-       invokeEvent p h
+-- | 'DIO' is an instance of 'EventIOQueueing'.
+instance EventIOQueueing DIO where
+
+  enqueueEventIO t h =
+    enqueueEvent t $
+    Event $ \p ->
+    do ok <- invokeEvent p $
+             runTimeWarp $
+             syncLocalTime $
+             return ()
+       when ok $
+         invokeEvent p h
 
 -- | Handle the 'Event' retry.
 handleEventRetry :: SimulationRetry -> Event DIO ()
