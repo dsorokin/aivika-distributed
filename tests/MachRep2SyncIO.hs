@@ -117,8 +117,13 @@ slaveModel masterId =
   
      runEventInStartTime machine
 
-     syncEventInStopTime $
-       liftIO $ putStrLn "The sub-model finished"
+     runEventInStartTime $
+       enqueueEventIOWithStopTime $
+       liftIO $
+       putStrLn "The sub-model finished"
+
+     runEventInStopTime $
+       return ()
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO (Double, Double)
@@ -171,11 +176,11 @@ masterModel count =
           enqueueMessage senderId (t + delta) (ReleaseRepairPersonResp inboxId)
 
      runEventInStartTime $
-       forM_ [100, 200.. 1000] $ \t ->
-       syncEvent t $
-       liftIO $
-       putStrLn $
-       "t = " ++ show t ++ ": synchronization"
+       enqueueEventIOWithTimes [100, 200..] $
+       do t <- liftDynamics time
+          liftIO $
+            putStrLn $
+            "t = " ++ show t ++ ": synchronization"
           
      let upTimeProp =
            do x <- readRef totalUpTime

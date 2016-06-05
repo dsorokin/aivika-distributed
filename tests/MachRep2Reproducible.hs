@@ -133,8 +133,13 @@ slaveModel masterId i =
   
      runEventInStartTime machine
 
-     syncEventInStopTime $
-       liftIO $ putStrLn "The sub-model finished"
+     runEventInStartTime $
+       enqueueEventIOWithStopTime $
+       liftIO $
+       putStrLn "The sub-model finished"
+
+     runEventInStopTime $
+       return ()
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO (Double, Double)
