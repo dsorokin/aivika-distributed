@@ -9,7 +9,7 @@
 -- Stability  : experimental
 -- Tested with: GHC 7.10.3
 --
--- This module defines 'DIO' as an instance of the 'MonadDES' type class.
+-- This module defines 'DIO' as an instance of the 'MonadDES' and 'EventIOQueueing' type classes.
 --
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
@@ -49,4 +49,13 @@ instance MonadComp DIO
 
 instance {-# OVERLAPPING #-} MonadIO (Process DIO) where
   liftIO = liftEvent . liftIO
+
+-- | 'DIO' is an instance of 'EventIOQueueing'.
+instance EventIOQueueing DIO where
+
+  enqueueEventIO t h = enqueueEvent t $ eventRollableBack h
+  enqueueEventIOWithStartTime = enqueueEventWithStartTime . eventRollableBack
+  enqueueEventIOWithStopTime = enqueueEventWithStopTime . eventRollableBack
+  enqueueEventIOWithIntegTimes = enqueueEventWithIntegTimes . eventRollableBack
+  enqueueEventIOWithTimes ts h = enqueueEventWithTimes ts $ eventRollableBack h
 

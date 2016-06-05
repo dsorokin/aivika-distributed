@@ -15,7 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
-        syncEvent) where
+        eventRollableBack) where
 
 import Data.Maybe
 import Data.IORef
@@ -645,13 +645,9 @@ syncEvents processing =
        invokeEvent p $
        syncEvents processing
 
--- | Synchronize the simulation in all nodes and call
--- the specified computation at the given modeling time.
---
--- It is rather safe to put 'liftIO' within this function.
-syncEvent :: Double -> Event DIO () -> Event DIO ()
-syncEvent t h =
-  enqueueEvent t $
+-- | Return an event computation that can be rolled back.
+eventRollableBack :: Event DIO () -> Event DIO ()
+eventRollableBack h =
   Event $ \p ->
   do ok <- invokeEvent p $
            runTimeWarp $
