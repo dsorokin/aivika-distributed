@@ -15,6 +15,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
         antiMessages,
+        AcknowledgmentMessage(..),
+        acknowledgmentMessage,
         LocalProcessMessage(..),
         TimeServerMessage(..)) where
 
@@ -69,6 +71,35 @@ instance Eq Message where
     (messageSenderId x == messageSenderId y) &&
     (messageReceiverId x == messageReceiverId y) &&
     (messageAntiToggle x == messageAntiToggle y)
+
+-- | Represents an acknowledgement message.
+data AcknowledgmentMessage =
+  AcknowledgmentMessage { acknowledgmentSequenceNo :: Int,
+                          -- ^ The sequence number.
+                          acknowledgmentSendTime :: Double,
+                          -- ^ The send time.
+                          acknowledgmentReceiveTime :: Double,
+                          -- ^ The receive time.
+                          acknowledgmentSenderId :: DP.ProcessId,
+                          -- ^ The sender of the source message.
+                          acknowledgmentReceiverId :: DP.ProcessId,
+                          -- ^ The receiver of the source message.
+                          acknowledgmentMarked :: Bool
+                          -- ^ Whether the acknowledgment is marked.
+                        } deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary AcknowledgmentMessage
+
+-- | Create an acknowledgment message specifying whether it will be marked.
+acknowledgmentMessage :: Bool -> Message -> AcknowledgmentMessage
+acknowledgmentMessage marked x =
+  AcknowledgmentMessage { acknowledgmentSequenceNo = messageSequenceNo x,
+                          acknowledgmentSendTime = messageSendTime x,
+                          acknowledgmentReceiveTime = messageReceiveTime x,
+                          acknowledgmentSenderId = messageSenderId x,
+                          acknowledgmentReceiverId = messageReceiverId x,
+                          acknowledgmentMarked = marked
+                        }
 
 -- | The message sent to the local process.
 data LocalProcessMessage = QueueMessage Message
