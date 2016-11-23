@@ -4,7 +4,8 @@ The represented [aivika-distributed] [2] package extends the [aivika-transformer
 package and allows running the parallel distributed discrete event simulations.
 
 It is inspired by ideas of the Time Warp algorithm. The library implements
-an optimistic strategy with capabilities of transparent rollbacks.
+an optimistic strategy with capabilities of transparent rollbacks. To synchronize 
+the global virtual time, it uses Samadi's algorithm.
 
 [1]: http://hackage.haskell.org/package/aivika-transformers  "aivika-transformers"
 [2]: http://hackage.haskell.org/package/aivika-distributed  "aivika-distributed"

@@ -38,18 +38,21 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the output message queue.
 data OutputMessageQueue =
-  OutputMessageQueue { outputMessages :: DLL.DoubleLinkedList Message,
+  OutputMessageQueue { outputEnqueueTransientMessage :: Message -> IO (),
+                       -- ^ Enqueue the transient message.
+                       outputMessages :: DLL.DoubleLinkedList Message,
                        -- ^ The output messages.
                        outputMessageSequenceNo :: IORef Int
                        -- ^ The next sequence number.
                      }
 
 -- | Create a new output message queue.
-newOutputMessageQueue :: DIO OutputMessageQueue
-newOutputMessageQueue =
+newOutputMessageQueue :: (Message -> IO ()) -> DIO OutputMessageQueue
+newOutputMessageQueue transient =
   do ms <- liftIOUnsafe DLL.newList
      rn <- liftIOUnsafe $ newIORef 0
-     return OutputMessageQueue { outputMessages = ms,
+     return OutputMessageQueue { outputEnqueueTransientMessage = transient,
+                                 outputMessages = ms,
                                  outputMessageSequenceNo = rn }
 
 -- | Return the output message queue size.
@@ -68,6 +71,7 @@ sendMessage q m =
        do m' <- liftIOUnsafe $ DLL.listLast (outputMessages q)
           when (messageSendTime m' > messageSendTime m) $
             error "A new output message comes from the past: sendMessage."
+     liftIOUnsafe $ outputEnqueueTransientMessage q m
      deliverMessage m
      liftIOUnsafe $ DLL.listAddLast (outputMessages q) m
 
@@ -75,6 +79,8 @@ sendMessage q m =
 rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
 rollbackOutputMessages q t including =
   do ms <- liftIOUnsafe $ extractMessagesToRollback q t including
+     liftIOUnsafe $
+       forM_ ms $ outputEnqueueTransientMessage q
      deliverAntiMessages $ map antiMessage ms
      -- forM_ ms $ deliverAntiMessage . antiMessage
                  

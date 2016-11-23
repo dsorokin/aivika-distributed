@@ -84,6 +84,8 @@ data AcknowledgmentMessage =
                           -- ^ The sender of the source message.
                           acknowledgmentReceiverId :: DP.ProcessId,
                           -- ^ The receiver of the source message.
+                          acknowledgmentAntiToggle :: Bool,
+                          -- ^ Whether this is an anti-message acknowledgment.
                           acknowledgmentMarked :: Bool
                           -- ^ Whether the acknowledgment is marked.
                         } deriving (Eq, Ord, Show, Typeable, Generic)
@@ -98,6 +100,7 @@ acknowledgmentMessage marked x =
                           acknowledgmentReceiveTime = messageReceiveTime x,
                           acknowledgmentSenderId = messageSenderId x,
                           acknowledgmentReceiverId = messageReceiverId x,
+                          acknowledgmentAntiToggle = messageAntiToggle x,
                           acknowledgmentMarked = marked
                         }
 
@@ -106,6 +109,10 @@ data LocalProcessMessage = QueueMessage Message
                            -- ^ the message has come from the remote process
                          | QueueMessageBulk [Message]
                            -- ^ a bulk of messages that have come from the remote process
+                         | AcknowledgmentQueueMessage AcknowledgmentMessage
+                           -- ^ the acknowledgment message has come from the remote process
+                         | AcknowledgmentQueueMessageBulk [AcknowledgmentMessage]
+                           -- ^ a bulk of acknowledgment messages that have come from the remote process 
                          | GlobalTimeMessage (Maybe Double)
                            -- ^ the time server sent a global time
                          | LocalTimeMessageResp Double

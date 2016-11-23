@@ -26,7 +26,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 
 data OutputMessageQueue
 
-newOutputMessageQueue :: DIO OutputMessageQueue
+newOutputMessageQueue :: (Message -> IO ()) -> DIO OutputMessageQueue
 
 outputMessageQueueSize :: OutputMessageQueue -> IO Int
 

@@ -42,6 +42,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
+import Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref as R
 
@@ -58,6 +59,8 @@ instance EventQueueing DIO where
                  -- ^ the input message queue
                  queueOutputMessages :: OutputMessageQueue,
                  -- ^ the output message queue
+                 queueTransientMessages :: TransientMessageQueue,
+                 -- ^ the transient message queue
                  queueLog :: UndoableLog,
                  -- ^ the undoable log of operations
                  queuePQ :: R.Ref (PQ.PriorityQueue (Point DIO -> DIO ())),
@@ -74,8 +77,10 @@ instance EventQueueing DIO where
                  -- ^ the short-term queue local time
                  queueLocalTimeTimestamp :: IORef UTCTime,
                  -- ^ the queue local time timestamp
-                 queueLocalTimeInterval :: NominalDiffTime
+                 queueLocalTimeInterval :: NominalDiffTime,
                  -- ^ the queue local time interval for updating
+                 queueInFind :: IORef Bool
+                 -- ^ whether the queue is in find mode
                }
 
   newEventQueue specs =
@@ -84,14 +89,17 @@ instance EventQueueing DIO where
        gt <- liftIOUnsafe $ newIORef $ spcStartTime specs
        pq <- R.newRef0 PQ.emptyQueue
        log <- newUndoableLog
-       output <- newOutputMessageQueue
+       transient <- newTransientMessageQueue
+       output <- newOutputMessageQueue $ enqueueTransientMessage transient
        input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
        loct <- liftIOUnsafe $ newIORef $ spcStartTime specs
        loct0 <- liftIOUnsafe $ newIORef $ spcStartTime specs
        loctstamp <- liftIOUnsafe $ getCurrentTime >>= newIORef
-       locdt <- fmap (fromRational . microsecondsToSeconds . dioSyncTimeout) dioParams 
+       locdt <- fmap (fromRational . microsecondsToSeconds . dioSyncTimeout) dioParams
+       infind <- liftIOUnsafe $ newIORef False
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
+                           queueTransientMessages = transient,
                            queueLog  = log,
                            queuePQ   = pq,
                            queueBusy = f,
@@ -100,7 +108,8 @@ instance EventQueueing DIO where
                            queueLocalTime = loct,
                            queueLocalTime0 = loct0,
                            queueLocalTimeTimestamp = loctstamp,
-                           queueLocalTimeInterval = locdt }
+                           queueLocalTimeInterval = locdt,
+                           queueInFind = infind }
 
   enqueueEvent t (Event m) =
     Event $ \p ->
@@ -331,6 +340,8 @@ processChannelMessage x@(QueueMessage m) =
      --- invokeEvent p $
      ---   logMessage x
      ---
+     infind <- liftIOUnsafe $ readIORef (queueInFind q)
+     deliverAcknowledgmentMessage (acknowledgmentMessage infind m)
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      when (messageReceiveTime m < t0) $
        do f <- fmap dioAllowProcessingOutdatedMessage dioParams
@@ -346,6 +357,8 @@ processChannelMessage x@(QueueMessageBulk ms) =
      --- invokeEvent p $
      ---   logMessage x
      ---
+     infind <- liftIOUnsafe $ readIORef (queueInFind q)
+     deliverAcknowledgmentMessages $ map (acknowledgmentMessage infind) ms
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      forM_ ms $ \m ->
        do when (messageReceiveTime m < t0) $
@@ -355,6 +368,25 @@ processChannelMessage x@(QueueMessageBulk ms) =
                  else error "Received the outdated message: processChannelMessage"
           invokeTimeWarp p $
             enqueueMessage (queueInputMessages q) m
+processChannelMessage x@(AcknowledgmentQueueMessage m) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     liftIOUnsafe $
+       processAcknowledgmentMessage (queueTransientMessages q) m
+processChannelMessage x@(AcknowledgmentQueueMessageBulk ms) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     liftIOUnsafe $
+       forM_ ms $
+       processAcknowledgmentMessage (queueTransientMessages q)
 processChannelMessage x@(GlobalTimeMessage globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
