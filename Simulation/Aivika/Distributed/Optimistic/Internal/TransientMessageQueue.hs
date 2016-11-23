@@ -57,13 +57,20 @@ data TransientMessageQueueItem =
 
 instance Ord TransientMessageQueueItem where
 
-  x <= y =
-    (itemReceiveTime x <= itemReceiveTime y) ||
-    (itemSendTime x <= itemSendTime y) ||
-    (itemSequenceNo x <= itemSequenceNo y) ||
-    (itemReceiverId x <= itemReceiverId y) ||
-    (itemSenderId x <= itemSenderId y) ||
-    (itemAntiToggle x <= itemAntiToggle y)
+  x <= y
+    | (itemReceiveTime x < itemReceiveTime y) = True
+    | (itemReceiveTime x > itemReceiveTime y) = False
+    | (itemSendTime x < itemSendTime y)       = True
+    | (itemSendTime x > itemSendTime y)       = False
+    | (itemSequenceNo x < itemSequenceNo y)   = True
+    | (itemSequenceNo x > itemSequenceNo y)   = False
+    | (itemReceiverId x < itemReceiverId y)   = True
+    | (itemReceiverId x > itemReceiverId y)   = False
+    | (itemSenderId x < itemSenderId y)       = True
+    | (itemSenderId x > itemSenderId y)       = False
+    | (itemAntiToggle x < itemAntiToggle y)   = True
+    | (itemAntiToggle x > itemAntiToggle y)   = False
+    | otherwise                               = True
 
 -- | Return a queue item by the specified transient message.
 transientMessageQueueItem :: Message -> TransientMessageQueueItem
