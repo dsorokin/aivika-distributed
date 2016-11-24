@@ -21,6 +21,7 @@ module Simulation.Aivika.Distributed.Optimistic.DIO
         timeServerId,
         logDIO,
         terminateDIO,
+        registerDIO,
         unregisterDIO) where
 
 import Control.Monad
