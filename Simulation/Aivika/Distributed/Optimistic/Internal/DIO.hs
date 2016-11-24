@@ -18,6 +18,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         runDIO,
         defaultDIOParams,
         terminateDIO,
+        registerDIO,
         unregisterDIO,
         dioParams,
         messageChannel,
@@ -161,6 +162,16 @@ terminateDIO =
      liftDistributedUnsafe $
        DP.send receiver (TerminateTimeServerMessage sender)
 
+-- | Register the simulation process in the time server, which
+-- requires some initial quorum to start synchronizing the global time.
+registerDIO :: DIO ()
+registerDIO =
+  do logDIO INFO "Registering the simulation process..."
+     sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       DP.send receiver (RegisterLocalProcessMessage sender)
+
 -- | Unregister the simulation process from the time server
 -- without affecting the processes in other nodes connected to
 -- the corresponding time server.
@@ -188,10 +199,6 @@ runDIO m ps serverId =
                logProcess ps INFO "Terminating the inbox process..."
                ---
                DP.terminate
-     ---
-     logProcess ps INFO "Registering the simulation process..."
-     ---
-     DP.send serverId (RegisterLocalProcessMessage inboxId)
      return (inboxId, unDIO m DIOContext { dioChannel = ch,
                                            dioInboxId = inboxId,
                                            dioTimeServerId = serverId,

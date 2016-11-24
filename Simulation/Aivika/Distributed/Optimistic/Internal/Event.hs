@@ -71,14 +71,6 @@ instance EventQueueing DIO where
                  -- ^ the actual time of the event queue
                  queueGlobalTime :: IORef Double,
                  -- ^ the global time
-                 queueLocalTime :: IORef Double,
-                 -- ^ the long-term queue local time
-                 queueLocalTime0 :: IORef Double,
-                 -- ^ the short-term queue local time
-                 queueLocalTimeTimestamp :: IORef UTCTime,
-                 -- ^ the queue local time timestamp
-                 queueLocalTimeInterval :: NominalDiffTime,
-                 -- ^ the queue local time interval for updating
                  queueInFind :: IORef Bool
                  -- ^ whether the queue is in find mode
                }
@@ -92,10 +84,6 @@ instance EventQueueing DIO where
        transient <- newTransientMessageQueue
        output <- newOutputMessageQueue $ enqueueTransientMessage transient
        input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
-       loct <- liftIOUnsafe $ newIORef $ spcStartTime specs
-       loct0 <- liftIOUnsafe $ newIORef $ spcStartTime specs
-       loctstamp <- liftIOUnsafe $ getCurrentTime >>= newIORef
-       locdt <- fmap (fromRational . microsecondsToSeconds . dioSyncTimeout) dioParams
        infind <- liftIOUnsafe $ newIORef False
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
@@ -105,10 +93,6 @@ instance EventQueueing DIO where
                            queueBusy = f,
                            queueTime = t,
                            queueGlobalTime = gt,
-                           queueLocalTime = loct,
-                           queueLocalTime0 = loct0,
-                           queueLocalTimeTimestamp = loctstamp,
-                           queueLocalTimeInterval = locdt,
                            queueInFind = infind }
 
   enqueueEvent t (Event m) =
@@ -154,10 +138,7 @@ rollbackEventTime =
      --- logDIO DEBUG $
      ---   "Setting the queue time = " ++ show t
      ---
-     liftIOUnsafe $
-       do writeIORef (queueTime q) t
-          modifyIORef' (queueLocalTime q) (min t)
-          modifyIORef' (queueLocalTime0 q) (min t)
+     liftIOUnsafe $ writeIORef (queueTime q) t
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      when (t0 > t) $
        do ---
@@ -165,7 +146,6 @@ rollbackEventTime =
           ---   "Setting the global time = " ++ show t
           ---
           liftIOUnsafe $ writeIORef (queueGlobalTime q) t
-          invokeEvent p sendLocalTime
 
 -- | Return the current event time.
 currentEventTime :: Event DIO Double
@@ -307,8 +287,7 @@ isEventOverflow =
 throttleMessageChannel :: TimeWarp DIO ()
 throttleMessageChannel =
   TimeWarp $ \p ->
-  do invokeEvent p updateLocalTime
-     invokeEvent p sendLocalTime
+  do invokeEvent p requestGlobalTime
      ch <- messageChannel
      dt <- fmap dioSyncTimeout dioParams
      liftIOUnsafe $
@@ -387,6 +366,20 @@ processChannelMessage x@(AcknowledgmentQueueMessageBulk ms) =
      liftIOUnsafe $
        forM_ ms $
        processAcknowledgmentMessage (queueTransientMessages q)
+processChannelMessage x@ComputeLocalTimeMessage =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     liftIOUnsafe $
+       writeIORef (queueInFind q) True
+     t' <- invokeEvent p getLocalTime
+     sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       DP.send receiver (LocalTimeMessage sender t')
 processChannelMessage x@(GlobalTimeMessage globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -394,24 +387,9 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      --- invokeEvent p $
      ---   logMessage x
      ---
-     case globalTime of
-       Nothing -> return ()
-       Just t0 ->
-         invokeEvent p $
-         updateGlobalTime t0
-     invokeEvent p updateLocalTime
-     t <- invokeEvent p getLocalTime
-     sender   <- messageInboxId
-     receiver <- timeServerId
-     liftDistributedUnsafe $
-       DP.send receiver (GlobalTimeMessageResp sender t)
-processChannelMessage x@(LocalTimeMessageResp globalTime) =
-  TimeWarp $ \p ->
-  do let q = runEventQueue $ pointRun p
-     ---
-     --- invokeEvent p $
-     ---   logMessage x
-     ---
+     liftIOUnsafe $
+       do writeIORef (queueInFind q) False
+          clearAcknowledgmentMessages (queueTransientMessages q)
      invokeEvent p $
        updateGlobalTime globalTime
 processChannelMessage x@TerminateLocalProcessMessage =
@@ -423,12 +401,20 @@ processChannelMessage x@TerminateLocalProcessMessage =
      liftDistributedUnsafe $
        DP.terminate
 
+-- | Return the local minimum time.
+getLocalTime :: Event DIO Double
+getLocalTime =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     t1 <- liftIOUnsafe $ readIORef (queueTime q)
+     t2 <- liftIOUnsafe $ transientMessageQueueTime (queueTransientMessages q)
+     return (min t1 t2)
+
 -- | Update the global time.
 updateGlobalTime :: Double -> Event DIO ()
 updateGlobalTime t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
-     invokeEvent p updateLocalTime
      t' <- invokeEvent p getLocalTime
      if t > t'
        then logDIO WARNING $
@@ -438,6 +424,20 @@ updateGlobalTime t =
                  writeIORef (queueGlobalTime q) t
                invokeEvent p $
                  reduceEvents t
+
+-- | Request for the global minimum time.
+requestGlobalTime :: Event DIO ()
+requestGlobalTime =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logRequestGlobalTime
+     ---
+     sender   <- messageInboxId
+     receiver <- timeServerId
+     liftDistributedUnsafe $
+       DP.send receiver (RequestGlobalTimeMessage sender)
 
 -- | Show the message.
 showMessage :: Message -> ShowS
@@ -495,16 +495,16 @@ logSyncLocalTime0 =
        ", global t = " ++ (show t') ++
        ": synchronizing the local time in ring 0..."
 
--- | Log that the local time is sent to the time server.
-logSendLocalTime :: Event DIO ()
-logSendLocalTime =
+-- | Log that the global time is requested.
+logRequestGlobalTime :: Event DIO ()
+logRequestGlobalTime =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
      t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      logDIO DEBUG $
        "t = " ++ (show $ pointTime p) ++
        ", global t = " ++ (show t') ++
-       ": sending the local time to the time server after delay..."
+       ": requesting for a new global time..."
 
 -- | Log an evidence of the premature IO.
 logPrematureIO :: Event DIO ()
@@ -552,48 +552,6 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
                         "Detected a premature IO action at t = " ++
                         (show $ pointTime p) ++ ": liftIO"
 
--- | Update the local time.
-updateLocalTime :: Event DIO Bool
-updateLocalTime =
-  Event $ \p ->
-  do let q = runEventQueue $ pointRun p
-     timestamp0 <- liftIOUnsafe $ readIORef (queueLocalTimeTimestamp q)
-     timestamp  <- liftIOUnsafe getCurrentTime
-     let dt = queueLocalTimeInterval q
-     if timestamp >= addUTCTime dt timestamp0
-       then do ---
-               --- logDIO DEBUG $ "t = " ++ (show $ pointTime p) ++ ": updating the local time"
-               ---
-               liftIOUnsafe $
-                 do t <- readIORef (queueTime q)
-                    loct0 <- readIORef (queueLocalTime0 q)
-                    writeIORef (queueLocalTime q) (min t loct0)
-                    writeIORef (queueLocalTime0 q) t
-                    writeIORef (queueLocalTimeTimestamp q) timestamp
-                    return (t /= loct0)
-       else return False
-
--- | Get the local time.
-getLocalTime :: Event DIO Double
-getLocalTime =
-  Event $ \p ->
-  let q = runEventQueue $ pointRun p
-  in liftIOUnsafe $ readIORef (queueLocalTime q)
-
--- | Send the local time to the time server.
-sendLocalTime :: Event DIO ()
-sendLocalTime =
-  Event $ \p ->
-  do ---
-     --- invokeEvent p logSendLocalTime
-     ---
-     invokeEvent p updateLocalTime
-     t <- invokeEvent p getLocalTime
-     sender   <- messageInboxId
-     receiver <- timeServerId
-     liftDistributedUnsafe $
-       DP.send receiver (LocalTimeMessage sender t)
-
 -- | Synchronize the local time executing the specified computation.
 syncLocalTime :: Dynamics DIO () -> TimeWarp DIO ()
 syncLocalTime m =
@@ -619,11 +577,8 @@ syncLocalTime m =
                                 Just _  ->
                                   invokeTimeWarp p $ syncLocalTime m
                                 Nothing ->
-                                  do f <- invokeEvent p updateLocalTime
-                                     invokeEvent p sendLocalTime
-                                     if f
-                                       then invokeTimeWarp p $ syncLocalTime m
-                                       else invokeTimeWarp p $ syncLocalTime0 m
+                                  do invokeEvent p requestGlobalTime
+                                     invokeTimeWarp p $ syncLocalTime0 m
                       else return ()
   
 -- | Synchronize the local time executing the specified computation in ring 0.

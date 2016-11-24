@@ -112,11 +112,11 @@ data LocalProcessMessage = QueueMessage Message
                          | AcknowledgmentQueueMessage AcknowledgmentMessage
                            -- ^ the acknowledgment message has come from the remote process
                          | AcknowledgmentQueueMessageBulk [AcknowledgmentMessage]
-                           -- ^ a bulk of acknowledgment messages that have come from the remote process 
-                         | GlobalTimeMessage (Maybe Double)
+                           -- ^ a bulk of acknowledgment messages that have come from the remote process
+                         | ComputeLocalTimeMessage
+                           -- ^ the time server requests for a local minimum time
+                         | GlobalTimeMessage Double
                            -- ^ the time server sent a global time
-                         | LocalTimeMessageResp Double
-                           -- ^ the time server replied to 'LocalTimeMessage' sending its global time in response
                          | TerminateLocalProcessMessage
                            -- ^ the time server asked to terminate the process
                          deriving (Eq, Show, Typeable, Generic)
@@ -128,10 +128,10 @@ data TimeServerMessage = RegisterLocalProcessMessage DP.ProcessId
                          -- ^ register the local process in the time server
                        | UnregisterLocalProcessMessage DP.ProcessId
                          -- ^ unregister the local process from the time server
-                       | GlobalTimeMessageResp DP.ProcessId Double
-                         -- ^ the local process replied to 'GlobalTimeMessage' sending its local time in response
+                       | RequestGlobalTimeMessage DP.ProcessId
+                         -- ^ the local process requested for the global minimum time
                        | LocalTimeMessage DP.ProcessId Double
-                         -- ^ the local process sent its local time
+                         -- ^ the local process sent its local minimum time
                        | TerminateTimeServerMessage DP.ProcessId
                          -- ^ the local process asked to terminate the time server
                        deriving (Eq, Show, Typeable, Generic)
