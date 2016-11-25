@@ -29,7 +29,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Concurrent
 import qualified Control.Distributed.Process as DP
-import Control.Distributed.Process.Closure (remotable, mkClosure)
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
