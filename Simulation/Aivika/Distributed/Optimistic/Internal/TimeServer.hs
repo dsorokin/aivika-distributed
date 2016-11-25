@@ -214,6 +214,10 @@ computeTimeServerGlobalTime :: TimeServer -> DP.Process ()
 computeTimeServerGlobalTime server =
   do zs <- liftIO $ fmap M.assocs $ readIORef (tsProcesses server)
      forM_ zs $ \(pid, x) ->
+       liftIO $
+       modifyIORef (tsProcessesInFind server) $
+       S.insert pid
+     forM_ zs $ \(pid, x) ->
        DP.send pid ComputeLocalTimeMessage
 
 -- | Provide the local processes with the global time.
