@@ -176,7 +176,9 @@ tryStartTimeServer server =
                       return ()
                  else do writeIORef (tsInInit server) False
                          return $
-                           tryComputeTimeServerGlobalTime server
+                           do logTimeServer server INFO $
+                                "Time Server: starting"
+                              tryComputeTimeServerGlobalTime server
   
 -- | Try to compute the global time and provide the local processes with it.
 tryComputeTimeServerGlobalTime :: TimeServer -> DP.Process ()
@@ -211,7 +213,9 @@ tryProvideTimeServerGlobalTime server =
 -- | Initiate computing the global time.
 computeTimeServerGlobalTime :: TimeServer -> DP.Process ()
 computeTimeServerGlobalTime server =
-  do zs <- liftIO $ fmap M.assocs $ readIORef (tsProcesses server)
+  do logTimeServer server DEBUG $
+       "Time Server: computing the global time..."
+     zs <- liftIO $ fmap M.assocs $ readIORef (tsProcesses server)
      forM_ zs $ \(pid, x) ->
        liftIO $
        modifyIORef (tsProcessesInFind server) $
@@ -223,6 +227,8 @@ computeTimeServerGlobalTime server =
 provideTimeServerGlobalTime :: TimeServer -> DP.Process ()
 provideTimeServerGlobalTime server =
   do t0 <- liftIO $ timeServerGlobalTime server
+     logTimeServer server DEBUG $
+       "Time Server: providing the global time = " ++ show t0
      case t0 of
        Nothing -> return ()
        Just t0 ->
