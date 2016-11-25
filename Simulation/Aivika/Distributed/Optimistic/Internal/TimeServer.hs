@@ -78,7 +78,7 @@ defaultTimeServerParams =
 -- | Create a new time server by the specified initial quorum and parameters.
 newTimeServer :: Int -> TimeServerParams -> IO TimeServer
 newTimeServer n ps =
-  do f  <- newIORef False
+  do f  <- newIORef True
      m  <- newIORef M.empty
      s  <- newIORef S.empty
      t0 <- newIORef Nothing
