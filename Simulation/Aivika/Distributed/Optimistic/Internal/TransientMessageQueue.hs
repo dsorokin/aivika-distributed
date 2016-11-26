@@ -12,10 +12,12 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
        (TransientMessageQueue,
         newTransientMessageQueue,
+        transientMessageQueueSize,
         transientMessageQueueTime,
         enqueueTransientMessage,
         processAcknowledgmentMessage,
-        clearAcknowledgmentMessages,
+        acknowledgmentMessageTime,
+        resetAcknowledgmentMessageTime,
         deliverAcknowledgmentMessage,
         deliverAcknowledgmentMessages) where
 
@@ -100,15 +102,19 @@ newTransientMessageQueue =
      return TransientMessageQueue { queuePrototypeMessages = ms,
                                     queueMarkedMessageTime = r }
 
+-- | Get the transient message queue size.
+transientMessageQueueSize :: TransientMessageQueue -> IO Int
+transientMessageQueueSize q =
+  fmap S.size $ readIORef (queuePrototypeMessages q)
+
 -- | Get the virtual time of the transient message queue.
 transientMessageQueueTime :: TransientMessageQueue -> IO Double
-transientMessageQueueTime q = liftM2 min m1 m2
-  where m1 = do s <- readIORef (queuePrototypeMessages q)
-                if S.null s
-                  then return (1 / 0)
-                  else let m = S.findMin s
-                       in return (itemReceiveTime m)
-        m2 = readIORef (queueMarkedMessageTime q)
+transientMessageQueueTime q =
+  do s <- readIORef (queuePrototypeMessages q)
+     if S.null s
+       then return (1 / 0)
+       else let m = S.findMin s
+            in return (itemReceiveTime m)
 
 -- | Enqueue the transient message.
 enqueueTransientMessage :: TransientMessageQueue -> Message -> IO ()
@@ -130,9 +136,14 @@ processAcknowledgmentMessage q m =
      when (acknowledgmentMarked m) $
        enqueueAcknowledgmentMessage q m
 
--- | Clear the marked acknowledgment messages.
-clearAcknowledgmentMessages :: TransientMessageQueue -> IO ()
-clearAcknowledgmentMessages q =
+-- | Get the minimal marked acknowledgment message time.
+acknowledgmentMessageTime :: TransientMessageQueue -> IO Double
+acknowledgmentMessageTime q =
+  readIORef (queueMarkedMessageTime q)
+
+-- | Reset the marked acknowledgment message time.
+resetAcknowledgmentMessageTime :: TransientMessageQueue -> IO ()
+resetAcknowledgmentMessageTime q =
   writeIORef (queueMarkedMessageTime q) (1 / 0)
 
 -- | Deliver the acknowledgment message on low level.

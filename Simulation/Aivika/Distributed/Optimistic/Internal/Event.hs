@@ -389,7 +389,7 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      ---
      liftIOUnsafe $
        do writeIORef (queueInFind q) False
-          clearAcknowledgmentMessages (queueTransientMessages q)
+          resetAcknowledgmentMessageTime (queueTransientMessages q)
      invokeEvent p $
        updateGlobalTime globalTime
 processChannelMessage x@TerminateLocalProcessMessage =
@@ -408,7 +408,19 @@ getLocalTime =
   do let q = runEventQueue $ pointRun p
      t1 <- liftIOUnsafe $ readIORef (queueTime q)
      t2 <- liftIOUnsafe $ transientMessageQueueTime (queueTransientMessages q)
-     return (min t1 t2)
+     t3 <- liftIOUnsafe $ acknowledgmentMessageTime (queueTransientMessages q)
+     let t' = t1 `min` t2 `min` t3
+     ---
+     --- n <- liftIOUnsafe $ transientMessageQueueSize (queueTransientMessages q)
+     --- logDIO ERROR $
+     ---   "t = " ++ show (pointTime p) ++
+     ---   ": queue time = " ++ show t1 ++
+     ---   ", unacknowledged time = " ++ show t2 ++
+     ---   ", marked acknowledged time = " ++ show t3 ++
+     ---   ", transient queue size = " ++ show n ++
+     ---   " -> " ++ show t'
+     ---
+     return t'
 
 -- | Update the global time.
 updateGlobalTime :: Double -> Event DIO ()
