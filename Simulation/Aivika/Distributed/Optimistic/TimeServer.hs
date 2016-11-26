@@ -12,6 +12,7 @@
 module Simulation.Aivika.Distributed.Optimistic.TimeServer
        (TimeServerParams(..),
         defaultTimeServerParams,
-        timeServer) where
+        timeServer,
+        curryTimeServer) where
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer

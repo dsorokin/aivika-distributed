@@ -14,7 +14,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServerParams(..),
         defaultTimeServerParams,
-        timeServer) where
+        timeServer,
+        curryTimeServer) where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -72,7 +73,7 @@ defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
   TimeServerParams { tsLoggingPriority = WARNING,
                      tsExpectTimeout = 1000,
-                     tsTimeSyncDelay = 1000
+                     tsTimeSyncDelay = 100000
                    }
 
 -- | Create a new time server by the specified initial quorum and parameters.
@@ -279,6 +280,10 @@ timeServer n ps =
           liftIO $
             threadDelay (tsTimeSyncDelay ps)
           tryComputeTimeServerGlobalTime server
+
+-- | A curried version of 'timeServer' for starting the time server on remote node.
+curryTimeServer :: (Int, TimeServerParams) -> DP.Process ()
+curryTimeServer (n, ps) = timeServer n ps
 
 -- | Log the message with the specified priority.
 logTimeServer :: TimeServer -> Priority -> String -> DP.Process ()
