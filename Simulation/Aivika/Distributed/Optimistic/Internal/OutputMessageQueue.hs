@@ -79,10 +79,11 @@ sendMessage q m =
 rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
 rollbackOutputMessages q t including =
   do ms <- liftIOUnsafe $ extractMessagesToRollback q t including
+     let ms' = map antiMessage ms
      liftIOUnsafe $
-       forM_ ms $ outputEnqueueTransientMessage q
-     deliverAntiMessages $ map antiMessage ms
-     -- forM_ ms $ deliverAntiMessage . antiMessage
+       forM_ ms' $ outputEnqueueTransientMessage q
+     deliverAntiMessages ms'
+     -- forM_ ms' deliverAntiMessage
                  
 -- | Return the messages to roolback by the specified time.
 extractMessagesToRollback :: OutputMessageQueue -> Double -> Bool -> IO [Message]
