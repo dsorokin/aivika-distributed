@@ -197,7 +197,8 @@ runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
     ps = defaultDIOParams { dioLoggingPriority = WARNING }
-    m  = do runSimulation (slaveModel masterId) specs
+    m  = do registerDIO
+            runSimulation (slaveModel masterId) specs
             unregisterDIO
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (Double, Double))
@@ -205,7 +206,8 @@ runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
     ps = defaultDIOParams { dioLoggingPriority = WARNING }
-    m  = do a <- runSimulation (masterModel n) specs
+    m  = do registerDIO
+            a <- runSimulation (masterModel n) specs
             terminateDIO
             return a
 
@@ -213,7 +215,7 @@ master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let n = 2
          timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
-     timeServerId <- DP.spawnLocal $ timeServer timeServerParams
+     timeServerId <- DP.spawnLocal $ timeServer 3 timeServerParams
      (masterId, masterProcess) <- runMasterModel timeServerId n
      forM_ [1..n] $ \i ->
        do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)

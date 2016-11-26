@@ -71,7 +71,8 @@ runModel timeServerId =
   do DP.say "Started simulating..."
      let ps = defaultDIOParams { dioLoggingPriority = NOTICE }
          m =
-           do a <- runSimulation model specs
+           do registerDIO
+              a <- runSimulation model specs
               terminateDIO
               return a
      (modelId, modelProcess) <- runDIO m ps timeServerId
@@ -81,7 +82,7 @@ runModel timeServerId =
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
-     timeServerId  <- DP.spawnLocal $ timeServer timeServerParams
+     timeServerId  <- DP.spawnLocal $ timeServer 1 timeServerParams
      runModel timeServerId
      liftIO $
        threadDelay 1000000

@@ -216,7 +216,8 @@ runSlaveModel (timeServerId, masterId) =
   runDIO m ps timeServerId
   where
     ps = defaultDIOParams { dioLoggingPriority = WARNING }
-    m  = do runSimulation (slaveModel masterId) specs
+    m  = do registerDIO
+            runSimulation (slaveModel masterId) specs
             unregisterDIO
 
 startSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process ()
@@ -224,14 +225,15 @@ startSlaveModel x@(timeServerId, masterId) =
   do (slaveId, slaveProcess) <- runSlaveModel x
      slaveProcess
 
-remotable ['startSlaveModel, 'timeServer]
+remotable ['startSlaveModel, 'curryTimeServer]
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (Double, Double))
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
     ps = defaultDIOParams { dioLoggingPriority = WARNING }
-    m  = do a <- runSimulation (masterModel n) specs
+    m  = do registerDIO
+            a <- runSimulation (masterModel n) specs
             terminateDIO
             return a
 
@@ -240,7 +242,7 @@ master = \backend nodes ->
      let [n0, n1, n2] = nodes
          timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
      -- timeServerId <- DP.spawnLocal $ timeServer timeServerParams
-     timeServerId <- DP.spawn n0 ($(mkClosure 'timeServer) timeServerParams)
+     timeServerId <- DP.spawn n0 ($(mkClosure 'curryTimeServer) (3 :: Int, timeServerParams))
      -- (masterId, masterProcess) <- runMasterModel timeServerId 2
      -- forM_ [1..2] $ \i ->
      --   do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
