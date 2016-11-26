@@ -3,8 +3,8 @@ version:         0.3
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package with facilities for running parallel distributed simulations.
-    It uses an optimistic strategy known as the Time Warp method. To synchronize the global virtual time, it uses Samadi's
-    algorithm.
+    It uses an optimistic strategy known as the Time Warp method. To synchronize the global virtual time, since version 0.3
+    it uses Samadi's algorithm.
     .
     \[1] <http://hackage.haskell.org/package/aivika-transformers>
     .
