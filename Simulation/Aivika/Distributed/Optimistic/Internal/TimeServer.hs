@@ -23,6 +23,7 @@ import Data.Maybe
 import Data.IORef
 import Data.Typeable
 import Data.Binary
+import Data.Time.Clock
 
 import GHC.Generics
 
@@ -41,7 +42,7 @@ data TimeServerParams =
                      tsExpectTimeout :: Int,
                      -- ^ the timeout in microseconds within which a new message is expected
                      tsTimeSyncDelay :: Int
-                     -- ^ the further delay in microseconds before the time synchronization
+                     -- ^ the delay in microseconds between the time synchronization sessions
                    } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerParams
@@ -72,8 +73,8 @@ data LocalProcessInfo =
 defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
   TimeServerParams { tsLoggingPriority = WARNING,
-                     tsExpectTimeout = 1000,
-                     tsTimeSyncDelay = 100000
+                     tsExpectTimeout = 100000,
+                     tsTimeSyncDelay = 1000000
                    }
 
 -- | Create a new time server by the specified initial quorum and parameters.
@@ -260,6 +261,10 @@ timeServerGlobalTime server =
                            Just _  ->
                              loop zs' (liftM2 min t acc)
 
+-- | Convert seconds to microseconds.
+secondsToMicroseconds :: Double -> Int
+secondsToMicroseconds x = fromInteger $ toInteger $ round (1000000 * x)
+
 -- | Start the time server by the specified initial quorum and parameters.
 -- The quorum defines the number of local processes that must be registered in
 -- the time server before the global time synchronization is started.
@@ -267,19 +272,23 @@ timeServer :: Int -> TimeServerParams -> DP.Process ()
 timeServer n ps =
   do server <- liftIO $ newTimeServer n ps
      logTimeServer server INFO "Time Server: starting..."
-     forever $
-       do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
-          case m of
-            Nothing -> return ()
-            Just m  ->
-              do ---
-                 logTimeServer server DEBUG $
-                   "Time Server: " ++ show m
-                 ---
-                 processTimeServerMessage server m
-          liftIO $
-            threadDelay (tsTimeSyncDelay ps)
-          tryComputeTimeServerGlobalTime server
+     let loop utc0 =
+           do m <- DP.expectTimeout (tsExpectTimeout ps) :: DP.Process (Maybe TimeServerMessage)
+              case m of
+                Nothing -> return ()
+                Just m  ->
+                  do ---
+                     logTimeServer server DEBUG $
+                       "Time Server: " ++ show m
+                     ---
+                     processTimeServerMessage server m
+              utc <- liftIO getCurrentTime
+              let dt = fromRational $ toRational (diffUTCTime utc utc0)
+              if secondsToMicroseconds dt > tsTimeSyncDelay ps
+                then do tryComputeTimeServerGlobalTime server
+                        loop utc
+                else loop utc0
+     liftIO getCurrentTime >>= loop 
 
 -- | A curried version of 'timeServer' for starting the time server on remote node.
 curryTimeServer :: (Int, TimeServerParams) -> DP.Process ()
