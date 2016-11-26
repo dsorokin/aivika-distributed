@@ -131,7 +131,7 @@ defaultDIOParams =
   DIOParams { dioLoggingPriority = WARNING,
               dioUndoableLogSizeThreshold = 500000,
               dioOutputMessageQueueSizeThreshold = 10000,
-              dioSyncTimeout = 5000000,
+              dioSyncTimeout = 60000000,
               dioAllowPrematureIO = False,
               dioAllowProcessingOutdatedMessage = False
             }
