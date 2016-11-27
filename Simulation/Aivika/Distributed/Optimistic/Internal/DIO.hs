@@ -129,7 +129,7 @@ liftDistributedUnsafe = DIO . const
 defaultDIOParams :: DIOParams
 defaultDIOParams =
   DIOParams { dioLoggingPriority = WARNING,
-              dioUndoableLogSizeThreshold = 500000,
+              dioUndoableLogSizeThreshold = 1000000,
               dioOutputMessageQueueSizeThreshold = 10000,
               dioSyncTimeout = 60000000,
               dioAllowPrematureIO = False,

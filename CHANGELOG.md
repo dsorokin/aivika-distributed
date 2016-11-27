@@ -6,4 +6,6 @@ Version 0.3
 
 * The local processes must call registerDIO to connect to the time server.
 
-* Increased the synchronization time-out and delay.
+* Increased the default synchronization time-out and delay.
+
+* Increased the default log size threshold.
