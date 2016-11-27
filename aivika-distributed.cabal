@@ -72,7 +72,8 @@ library
                      TypeFamilies,
                      RankNTypes,
                      DeriveGeneric,
-                     DeriveDataTypeable
+                     DeriveDataTypeable,
+                     OverlappingInstances
 
     ghc-options:     -O2
 

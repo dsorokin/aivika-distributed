@@ -1,5 +1,5 @@
 
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, OverlappingInstances #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.DIO

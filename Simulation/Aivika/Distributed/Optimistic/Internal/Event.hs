@@ -1,5 +1,5 @@
 
-{-# LANGUAGE TypeFamilies, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, OverlappingInstances #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Event
