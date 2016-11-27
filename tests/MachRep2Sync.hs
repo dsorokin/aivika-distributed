@@ -1,6 +1,7 @@
 
 {--# LANGUAGE TemplateHaskell #--}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 -- It corresponds to model MachRep2 described in document 
 -- Introduction to Discrete-Event Simulation and the SimPy Language
