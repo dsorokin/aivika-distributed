@@ -18,7 +18,6 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
 
 import Data.Maybe
 import Data.IORef
-import Data.Typeable
 import Data.Time.Clock
 
 import System.Timeout

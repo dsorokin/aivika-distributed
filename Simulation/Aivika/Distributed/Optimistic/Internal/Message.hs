@@ -1,5 +1,5 @@
 
-{-# LANGUAGE RankNTypes, DeriveGeneric #-}
+{-# LANGUAGE RankNTypes, DeriveGeneric, DeriveDataTypeable #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Message

@@ -1,5 +1,5 @@
 
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DeriveDataTypeable #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer

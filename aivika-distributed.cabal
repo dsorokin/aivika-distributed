@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         0.3
+version:         0.3.1
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package with facilities for running parallel distributed simulations.
@@ -71,7 +71,8 @@ library
                      FlexibleContexts,
                      TypeFamilies,
                      RankNTypes,
-                     DeriveGeneric
+                     DeriveGeneric,
+                     DeriveDataTypeable
 
     ghc-options:     -O2
 
