@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -122,14 +122,12 @@ generateMessageSequenceNo q =
 -- | Deliver the message on low level.
 deliverMessage :: Message -> DIO ()
 deliverMessage x =
-  liftDistributedUnsafe $
-  DP.send (messageReceiverId x) (QueueMessage x)
+  sendMessageDIO (messageReceiverId x) x
 
 -- | Deliver the anti-message on low level.
 deliverAntiMessage :: Message -> DIO ()
 deliverAntiMessage x =
-  liftDistributedUnsafe $
-  DP.send (messageReceiverId x) (QueueMessage x)
+  sendMessageDIO (messageReceiverId x) x
 
 -- | Deliver the anti-messages on low level.
 deliverAntiMessages :: [Message] -> DIO ()
@@ -137,6 +135,5 @@ deliverAntiMessages xs =
   let ys = groupBy (\a b -> messageReceiverId a == messageReceiverId b) xs
       dlv []         = return ()
       dlv zs@(z : _) =
-        liftDistributedUnsafe $
-        DP.send (messageReceiverId z) (QueueMessageBulk zs)
+        sendMessagesDIO (messageReceiverId z) zs
   in forM_ ys dlv

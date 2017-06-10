@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -17,7 +17,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         enqueueMessage,
         messageEnqueued,
         retryInputMessages,
-        reduceInputMessages) where
+        reduceInputMessages,
+        filterInputMessages) where
 
 import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Event
@@ -47,3 +48,5 @@ messageEnqueued :: InputMessageQueue -> Signal DIO Message
 retryInputMessages :: InputMessageQueue -> TimeWarp DIO ()
 
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
+
+filterInputMessages :: (Message -> Bool) -> InputMessageQueue -> IO [Message]

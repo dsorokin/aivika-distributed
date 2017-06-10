@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -14,6 +14,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
         newTransientMessageQueue,
         transientMessageQueueSize,
         transientMessageQueueTime,
+        transientMessages,
         enqueueTransientMessage,
         processAcknowledgmentMessage,
         acknowledgmentMessageTime,
@@ -21,7 +22,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
         deliverAcknowledgmentMessage,
         deliverAcknowledgmentMessages) where
 
-import qualified Data.Set as S
+import qualified Data.Map as M
 import Data.List
 import Data.IORef
 
@@ -35,8 +36,8 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 
 -- | Specifies the transient message queue.
 data TransientMessageQueue =
-  TransientMessageQueue { queuePrototypeMessages :: IORef (S.Set TransientMessageQueueItem),
-                          -- ^ The prototype messages.
+  TransientMessageQueue { queueTransientMessages :: IORef (M.Map TransientMessageQueueItem Message),
+                          -- ^ The transient messages.
                           queueMarkedMessageTime :: IORef Double
                           -- ^ The marked acknowledgment message time.
                         }
@@ -97,30 +98,36 @@ acknowledgmentMessageQueueItem m =
 -- | Create a new transient message queue.
 newTransientMessageQueue :: DIO TransientMessageQueue
 newTransientMessageQueue =
-  do ms <- liftIOUnsafe $ newIORef S.empty
+  do ms <- liftIOUnsafe $ newIORef M.empty
      r  <- liftIOUnsafe $ newIORef (1 / 0)
-     return TransientMessageQueue { queuePrototypeMessages = ms,
+     return TransientMessageQueue { queueTransientMessages = ms,
                                     queueMarkedMessageTime = r }
 
 -- | Get the transient message queue size.
 transientMessageQueueSize :: TransientMessageQueue -> IO Int
 transientMessageQueueSize q =
-  fmap S.size $ readIORef (queuePrototypeMessages q)
+  fmap M.size $ readIORef (queueTransientMessages q)
 
 -- | Get the virtual time of the transient message queue.
 transientMessageQueueTime :: TransientMessageQueue -> IO Double
 transientMessageQueueTime q =
-  do s <- readIORef (queuePrototypeMessages q)
-     if S.null s
+  do ms <- readIORef (queueTransientMessages q)
+     if M.null ms
        then return (1 / 0)
-       else let m = S.findMin s
+       else let (m, _) = M.findMin ms
             in return (itemReceiveTime m)
+
+-- | Get the transient messages.
+transientMessages :: TransientMessageQueue -> IO [Message]
+transientMessages q =
+  do ms <- readIORef (queueTransientMessages q)
+     return (M.elems ms)
 
 -- | Enqueue the transient message.
 enqueueTransientMessage :: TransientMessageQueue -> Message -> IO ()
 enqueueTransientMessage q m =
-  modifyIORef (queuePrototypeMessages q) $
-  S.insert (transientMessageQueueItem m)
+  modifyIORef (queueTransientMessages q) $
+  M.insert (transientMessageQueueItem m) m
 
 -- | Enqueue the acknowledgment message.
 enqueueAcknowledgmentMessage :: TransientMessageQueue -> AcknowledgmentMessage -> IO ()
@@ -131,10 +138,13 @@ enqueueAcknowledgmentMessage q m =
 -- | Process the acknowledgment message.
 processAcknowledgmentMessage :: TransientMessageQueue -> AcknowledgmentMessage -> IO () 
 processAcknowledgmentMessage q m =
-  do modifyIORef (queuePrototypeMessages q) $
-       S.delete (acknowledgmentMessageQueueItem m)
-     when (acknowledgmentMarked m) $
-       enqueueAcknowledgmentMessage q m
+  do ms <- readIORef (queueTransientMessages q)
+     let k = acknowledgmentMessageQueueItem m
+     when (M.member k ms) $
+       do modifyIORef (queueTransientMessages q) $
+            M.delete k
+          when (acknowledgmentMarked m) $
+            enqueueAcknowledgmentMessage q m
 
 -- | Get the minimal marked acknowledgment message time.
 acknowledgmentMessageTime :: TransientMessageQueue -> IO Double
@@ -149,8 +159,7 @@ resetAcknowledgmentMessageTime q =
 -- | Deliver the acknowledgment message on low level.
 deliverAcknowledgmentMessage :: AcknowledgmentMessage -> DIO ()
 deliverAcknowledgmentMessage x =
-  liftDistributedUnsafe $
-  DP.send (acknowledgmentSenderId x) (AcknowledgmentQueueMessage x)
+  sendAcknowledgmentMessageDIO (acknowledgmentSenderId x) x
 
 -- | Deliver the acknowledgment messages on low level.
 deliverAcknowledgmentMessages :: [AcknowledgmentMessage] -> DIO ()
@@ -158,6 +167,5 @@ deliverAcknowledgmentMessages xs =
   let ys = groupBy (\a b -> acknowledgmentSenderId a == acknowledgmentSenderId b) xs
       dlv []         = return ()
       dlv zs@(z : _) =
-        liftDistributedUnsafe $
-        DP.send (acknowledgmentSenderId z) (AcknowledgmentQueueMessageBulk zs)
+        sendAcknowledgmentMessagesDIO (acknowledgmentSenderId z) zs
   in forM_ ys dlv

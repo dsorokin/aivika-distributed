@@ -1,7 +1,7 @@
 
 -- |
--- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Ref
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Ref.Strict
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -9,7 +9,7 @@
 --
 -- This is an hs-boot file.
 --
-module Simulation.Aivika.Distributed.Optimistic.Internal.Ref where
+module Simulation.Aivika.Distributed.Optimistic.Internal.Ref.Strict where
 
 import Simulation.Aivika.Trans.Internal.Types
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO

@@ -1,5 +1,5 @@
 
-{--# LANGUAGE TemplateHaskell #--}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -21,6 +21,25 @@
 -- that a given machine does not have immediate access to the repairperson 
 -- when the machine breaks down. Output values should be about 0.6 and 0.67. 
 
+-- Compiling and Running
+---
+-- Compile using
+--
+-- ghc -threaded MachRep2Distributed.hs
+--
+-- Fire up some slave nodes (for the example, we run them on a single machine):
+--
+-- ./MachRep2DistributedReproducibleFaultTolerant slave 1 &
+-- ./MachRep2DistributedReproducibleFaultTolerant slave 2 &
+-- ./MachRep2DistributedReproducibleFaultTolerant slave 3 &
+--
+-- And start the master node:
+--
+-- ./MachRep2DistributedReproducibleFaultTolerant master 0
+--
+
+import System.Environment (getArgs)
+
 import Data.Typeable
 import Data.Binary
 
@@ -38,6 +57,8 @@ import Control.Distributed.Process.Backend.SimpleLocalnet
 
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Distributed
+
+import SimpleLocalnetHelper
 
 meanUpTime = 1.0
 meanRepairTime = 0.5
@@ -213,18 +234,30 @@ runSlaveModel :: (DP.ProcessId, DP.ProcessId, Int) -> DP.Process (DP.ProcessId, 
 runSlaveModel (timeServerId, masterId, i) =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = WARNING }
+    ps = defaultDIOParams { dioLoggingPriority = NOTICE,
+                            dioProcessMonitoringEnabled = True,
+                            dioProcessReconnectingEnabled = True }
     m  = do registerDIO
             runSimulation (slaveModel masterId i) specs
             unregisterDIO
 
--- remotable ['runSlaveModel, 'timeServer]
+startSlaveModel :: (DP.ProcessId, DP.ProcessId, Int) -> DP.Process ()
+startSlaveModel x@(timeServerId, masterId, i) =
+  do (slaveId, slaveProcess) <- runSlaveModel x
+     DP.send slaveId (MonitorProcessMessage timeServerId)
+     DP.send masterId (MonitorProcessMessage slaveId)
+     DP.send slaveId (MonitorProcessMessage masterId)
+     slaveProcess
+
+remotable ['startSlaveModel, 'curryTimeServer]
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (Double, Double))
 runMasterModel timeServerId n =
   runDIO m ps timeServerId
   where
-    ps = defaultDIOParams { dioLoggingPriority = WARNING }
+    ps = defaultDIOParams { dioLoggingPriority = NOTICE,
+                            dioProcessMonitoringEnabled = True,
+                            dioProcessReconnectingEnabled = True }
     m  = do registerDIO
             a <- runSimulation (masterModel n) specs
             terminateDIO
@@ -232,22 +265,37 @@ runMasterModel timeServerId n =
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     let n = length seeds
-         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
-     timeServerId <- DP.spawnLocal $ timeServer 3 timeServerParams
-     (masterId, masterProcess) <- runMasterModel timeServerId n
-     forM_ [1..n] $ \i ->
-       do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId, i)
-          DP.spawnLocal slaveProcess
+     let [n0, n1, n2] = nodes
+         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG,
+                                                      tsProcessMonitoringEnabled = True,
+                                                      tsProcessReconnectingEnabled = True }
+     -- timeServerId <- DP.spawnLocal $ timeServer timeServerParams
+     timeServerId <- DP.spawn n0 ($(mkClosure 'curryTimeServer) (3 :: Int, timeServerParams))
+     -- (masterId, masterProcess) <- runMasterModel timeServerId 2
+     -- forM_ [1..2] $ \i ->
+     --   do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
+     --      DP.spawnLocal slaveProcess
+     (masterId, masterProcess) <- runMasterModel timeServerId 2
+     DP.send masterId (MonitorProcessMessage timeServerId)
+     forM_ (zip [n1, n2] [(1 :: Int)..]) $ \(node, i) ->
+        DP.spawn node ($(mkClosure 'startSlaveModel) (timeServerId, masterId, i))
      a <- masterProcess
-     DP.say $
+     liftIO $
+       putStrLn $
        "The result is " ++ show a
-  
+     -- DP.say $
+     --   "The result is " ++ show a
+
 main :: IO ()
 main = do
-  backend <- initializeBackend "localhost" "8080" rtable
-  startMaster backend (master backend)
-    where
-      rtable :: DP.RemoteTable
-      -- rtable = __remoteTable initRemoteTable
-      rtable = initRemoteTable
+  args <- getArgs
+  case args of
+    ["master", i] -> do
+      (backend, nodes) <- getMasterConfBackend (read i) rtable
+      startMasterProcess backend nodes master
+    ["slave", i] -> do
+      backend <- getSlaveConfBackend (read i) rtable
+      startSlave backend
+  where
+    rtable :: DP.RemoteTable
+    rtable = __remoteTable initRemoteTable

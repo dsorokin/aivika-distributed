@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.TimeServer
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental

@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Channel
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -51,7 +51,7 @@ readChannel ch =
   do empty <- readIORef (channelListEmptyIO ch)
      if empty
        then return []
-       else do writeIORef (channelListEmptyIO ch) True
+       else do atomicWriteIORef (channelListEmptyIO ch) True
                xs <- atomically $
                      do xs <- readTVar (channelList ch)
                         writeTVar (channelList ch) []
@@ -66,7 +66,7 @@ writeChannel ch a =
        do xs <- readTVar (channelList ch)
           writeTVar (channelList ch) (a : xs)
           writeTVar (channelListEmpty ch) False
-     writeIORef (channelListEmptyIO ch) False
+     atomicWriteIORef (channelListEmptyIO ch) False
 
 -- | Wait for data in the channel.
 awaitChannel :: Channel a -> IO ()

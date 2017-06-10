@@ -1,4 +1,13 @@
 
+Version 0.5
+-----
+
+* Added an ability to restore the distributed simulation after temporary connection errors.
+
+* Better finalisation of the distributed simulation.
+
+* Implemented lazy references.
+
 Version 0.3
 -----
 

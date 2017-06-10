@@ -1,7 +1,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -17,7 +17,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
         enqueueMessage,
         messageEnqueued,
         retryInputMessages,
-        reduceInputMessages) where
+        reduceInputMessages,
+        filterInputMessages) where
 
 import Data.Maybe
 import Data.List
@@ -121,7 +122,10 @@ enqueueMessage q m =
          t0 = pointTime p
      i <- liftIOUnsafe $ findAntiMessage q m
      case i of
-       Nothing -> return ()
+       Nothing ->
+         do -- skip the message duplicate
+            logSkipInputMessage t0
+            return ()
        Just i | i >= 0 ->
          do -- found the anti-message at the specified index
             when (t <= t0) $
@@ -155,10 +159,16 @@ enqueueMessage q m =
               else do liftIOUnsafe $ insertMessage q m i
                       invokeEvent p $ activateMessage q i
 
+-- | Log the message skip
+logSkipInputMessage :: Double -> DIO ()
+logSkipInputMessage t0 =
+  logDIO NOTICE $
+  "Skip the message at t = " ++ (show t0)
+
 -- | Log the rollback.
 logRollbackInputMessages :: Double -> Double -> Bool -> DIO ()
 logRollbackInputMessages t0 t including =
-  logDIO NOTICE $
+  logDIO INFO $
   "Rollback at t = " ++ (show t0) ++ " --> " ++ (show t) ++
   (if not including then " not including" else "")
 
@@ -385,3 +395,16 @@ reduceInputMessages q t =
                               then loop n (i + 1)
                               else return i
 
+-- | Filter the input messages using the specified predicate.
+filterInputMessages :: (Message -> Bool) -> InputMessageQueue -> IO [Message]
+filterInputMessages pred q =
+  do count <- vectorCount (inputMessages q)
+     loop count 0 []
+       where
+         loop n i acc
+           | i >= n    = return (reverse acc)
+           | otherwise = do item <- readVector (inputMessages q) i
+                            let m = itemMessage item
+                            if pred m
+                              then loop n (i + 1) (m : acc)
+                              else loop n (i + 1) acc

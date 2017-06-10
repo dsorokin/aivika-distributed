@@ -3,7 +3,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Message
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -18,7 +18,9 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
         AcknowledgmentMessage(..),
         acknowledgmentMessage,
         LocalProcessMessage(..),
-        TimeServerMessage(..)) where
+        TimeServerMessage(..),
+        InboxProcessMessage(..),
+        KeepAliveMessage(..)) where
 
 import GHC.Generics
 
@@ -117,9 +119,13 @@ data LocalProcessMessage = QueueMessage Message
                            -- ^ the time server requests for a local minimum time
                          | GlobalTimeMessage Double
                            -- ^ the time server sent a global time
-                         | TerminateLocalProcessMessage
-                           -- ^ the time server asked to terminate the process
-                         deriving (Eq, Show, Typeable, Generic)
+                         | ProcessMonitorNotificationMessage DP.ProcessMonitorNotification
+                           -- ^ the process monitor notification
+                         | ReconnectProcessMessage DP.ProcessId
+                           -- ^ finish reconnecting to the specified process
+                         | KeepAliveLocalProcessMessage KeepAliveMessage
+                           -- ^ the keep alive message for the local process
+                         deriving (Show, Typeable, Generic)
 
 instance Binary LocalProcessMessage
 
@@ -128,13 +134,58 @@ data TimeServerMessage = RegisterLocalProcessMessage DP.ProcessId
                          -- ^ register the local process in the time server
                        | UnregisterLocalProcessMessage DP.ProcessId
                          -- ^ unregister the local process from the time server
+                       | TerminateTimeServerMessage DP.ProcessId
+                         -- ^ the local process asked to terminate the time server
                        | RequestGlobalTimeMessage DP.ProcessId
                          -- ^ the local process requested for the global minimum time
                        | LocalTimeMessage DP.ProcessId Double
                          -- ^ the local process sent its local minimum time
-                       | TerminateTimeServerMessage DP.ProcessId
-                         -- ^ the local process asked to terminate the time server
+                       | ReMonitorTimeServerMessage [DP.ProcessId]
+                         -- ^ re-monitor the local processes by their identifiers
                        deriving (Eq, Show, Typeable, Generic)
 
 instance Binary TimeServerMessage
 
+-- | The message destined directly for the inbox process.
+data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
+                           -- ^ monitor the local process by its inbox process identifier
+                         | ReMonitorProcessMessage [DP.ProcessId]
+                           -- ^ re-monitor the local processes by their identifiers
+                         | TrySendKeepAliveMessage
+                           -- ^ try to send a keep alive message
+                         | SendQueueMessage DP.ProcessId Message
+                           -- ^ send a queue message via the inbox process
+                         | SendQueueMessageBulk DP.ProcessId [Message]
+                           -- ^ send a bulk of queue messages via the inbox process
+                         | SendAcknowledgmentQueueMessage DP.ProcessId AcknowledgmentMessage
+                           -- ^ send an acknowledgment message via the inbox process
+                         | SendAcknowledgmentQueueMessageBulk DP.ProcessId [AcknowledgmentMessage]
+                           -- ^ send a bulk of acknowledgment messages via the inbox process
+                         | SendLocalTimeMessage DP.ProcessId DP.ProcessId Double
+                           -- ^ send the local time message to the time server
+                         | SendRequestGlobalTimeMessage DP.ProcessId DP.ProcessId
+                           -- ^ send the request for the global virtual time
+                         | SendRegisterLocalProcessMessage DP.ProcessId DP.ProcessId
+                           -- ^ register the local process in the time server
+                         | SendUnregisterLocalProcessMessage DP.ProcessId DP.ProcessId
+                           -- ^ unregister the local process from the time server
+                         | SendTerminateTimeServerMessage DP.ProcessId DP.ProcessId
+                           -- ^ the local process asked to terminate the time server
+                         | RegisterLocalProcessAcknowledgmentMessage DP.ProcessId
+                           -- ^ after registering the local process in the time server
+                         | UnregisterLocalProcessAcknowledgmentMessage DP.ProcessId
+                           -- ^ after unregistering the local process from the time server
+                         | TerminateTimeServerAcknowledgmentMessage DP.ProcessId
+                           -- ^ after started terminating the time server
+                         | TerminateInboxProcessMessage
+                           -- ^ terminate the inbox process
+                         deriving (Eq, Show, Typeable, Generic)
+
+instance Binary InboxProcessMessage
+
+-- | The keep-alive message type.
+data KeepAliveMessage = KeepAliveMessage
+                        -- ^ the keel-alive message.
+                        deriving (Eq, Show, Typeable, Generic)
+
+instance Binary KeepAliveMessage

@@ -3,7 +3,7 @@
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Internal.Event
--- Copyright  : Copyright (c) 2015-2016, David Sorokin <david.sorokin@gmail.com>
+-- Copyright  : Copyright (c) 2015-2017, David Sorokin <david.sorokin@gmail.com>
 -- License    : BSD3
 -- Maintainer : David Sorokin <david.sorokin@gmail.com>
 -- Stability  : experimental
@@ -14,7 +14,8 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
-        queueLog) where
+        queueLog,
+        processMonitorSignal) where
 
 import Data.Maybe
 import Data.IORef
@@ -39,11 +40,12 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
+import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.SignalHelper
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
-import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref as R
+import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref.Strict as R
 
 -- | Convert microseconds to seconds.
 microsecondsToSeconds :: Int -> Rational
@@ -70,8 +72,10 @@ instance EventQueueing DIO where
                  -- ^ the actual time of the event queue
                  queueGlobalTime :: IORef Double,
                  -- ^ the global time
-                 queueInFind :: IORef Bool
+                 queueInFind :: IORef Bool,
                  -- ^ whether the queue is in find mode
+                 queueProcessMonitorNotificationSource :: SignalSource DIO DP.ProcessMonitorNotification
+                 -- ^ the source of process monitor notifications
                }
 
   newEventQueue specs =
@@ -84,6 +88,7 @@ instance EventQueueing DIO where
        output <- newOutputMessageQueue $ enqueueTransientMessage transient
        input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
        infind <- liftIOUnsafe $ newIORef False
+       s <- newDIOSignalSource0
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueTransientMessages = transient,
@@ -92,7 +97,8 @@ instance EventQueueing DIO where
                            queueBusy = f,
                            queueTime = t,
                            queueGlobalTime = gt,
-                           queueInFind = infind }
+                           queueInFind = infind,
+                           queueProcessMonitorNotificationSource = s }
 
   enqueueEvent t (Event m) =
     Event $ \p ->
@@ -272,10 +278,12 @@ isEventOverflow =
   do let q = runEventQueue $ pointRun p
      n1 <- liftIOUnsafe $ logSize (queueLog q)
      n2 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
+     n3 <- liftIOUnsafe $ transientMessageQueueSize (queueTransientMessages q)
      ps <- dioParams
      let th1 = dioUndoableLogSizeThreshold ps
          th2 = dioOutputMessageQueueSizeThreshold ps
-     if (n1 >= th1) || (n2 >= th2)
+         th3 = dioTransientMessageQueueSizeThreshold ps
+     if (n1 >= th1) || (n2 >= th2) || (n3 >= th3)
        then do logDIO NOTICE $
                  "t = " ++ (show $ pointTime p) ++
                  ": detected the event overflow"
@@ -286,7 +294,7 @@ isEventOverflow =
 throttleMessageChannel :: TimeWarp DIO ()
 throttleMessageChannel =
   TimeWarp $ \p ->
-  do invokeEvent p requestGlobalTime
+  do -- invokeEvent p requestGlobalTime
      ch <- messageChannel
      dt <- fmap dioSyncTimeout dioParams
      liftIOUnsafe $
@@ -321,13 +329,14 @@ processChannelMessage x@(QueueMessage m) =
      infind <- liftIOUnsafe $ readIORef (queueInFind q)
      deliverAcknowledgmentMessage (acknowledgmentMessage infind m)
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     when (messageReceiveTime m < t0) $
-       do f <- fmap dioAllowProcessingOutdatedMessage dioParams
-          if f
-            then invokeEvent p logOutdatedMessage
-            else error "Received the outdated message: processChannelMessage"
-     invokeTimeWarp p $
-       enqueueMessage (queueInputMessages q) m
+     p' <- invokeEvent p currentEventPoint
+     if messageReceiveTime m < t0
+       then do f <- fmap dioAllowSkippingOutdatedMessage dioParams
+               if f
+                 then invokeEvent p' logOutdatedMessage
+                 else error "Received the outdated message: processChannelMessage"
+       else invokeTimeWarp p' $
+            enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(QueueMessageBulk ms) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -339,13 +348,14 @@ processChannelMessage x@(QueueMessageBulk ms) =
      deliverAcknowledgmentMessages $ map (acknowledgmentMessage infind) ms
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      forM_ ms $ \m ->
-       do when (messageReceiveTime m < t0) $
-            do f <- fmap dioAllowProcessingOutdatedMessage dioParams
-               if f
-                 then invokeEvent p logOutdatedMessage
-                 else error "Received the outdated message: processChannelMessage"
-          invokeTimeWarp p $
-            enqueueMessage (queueInputMessages q) m
+       do p' <- invokeEvent p currentEventPoint
+          if messageReceiveTime m < t0
+            then do f <- fmap dioAllowSkippingOutdatedMessage dioParams
+                    if f
+                      then invokeEvent p' logOutdatedMessage
+                      else error "Received the outdated message: processChannelMessage"
+            else invokeTimeWarp p' $
+                 enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(AcknowledgmentQueueMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -377,8 +387,7 @@ processChannelMessage x@ComputeLocalTimeMessage =
      t' <- invokeEvent p getLocalTime
      sender   <- messageInboxId
      receiver <- timeServerId
-     liftDistributedUnsafe $
-       DP.send receiver (LocalTimeMessage sender t')
+     sendLocalTimeDIO receiver sender t'
 processChannelMessage x@(GlobalTimeMessage globalTime) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -391,14 +400,32 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
           resetAcknowledgmentMessageTime (queueTransientMessages q)
      invokeEvent p $
        updateGlobalTime globalTime
-processChannelMessage x@TerminateLocalProcessMessage =
+processChannelMessage x@(ProcessMonitorNotificationMessage y@(DP.ProcessMonitorNotification _ pid reason)) =
   TimeWarp $ \p ->
-  do ---
+  do let q = runEventQueue $ pointRun p
+     ---
      --- invokeEvent p $
      ---   logMessage x
      ---
-     liftDistributedUnsafe $
-       DP.terminate
+     invokeEvent p $
+       triggerSignal (queueProcessMonitorNotificationSource q) y
+processChannelMessage x@(ReconnectProcessMessage pid) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     invokeEvent p $
+       reconnectProcess pid
+processChannelMessage x@(KeepAliveLocalProcessMessage m) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     return ()
 
 -- | Return the local minimum time.
 getLocalTime :: Event DIO Double
@@ -447,8 +474,7 @@ requestGlobalTime =
      ---
      sender   <- messageInboxId
      receiver <- timeServerId
-     liftDistributedUnsafe $
-       DP.send receiver (RequestGlobalTimeMessage sender)
+     sendRequestGlobalTimeDIO receiver sender
 
 -- | Show the message.
 showMessage :: Message -> ShowS
@@ -529,9 +555,9 @@ logPrematureIO =
 logOutdatedMessage :: Event DIO ()
 logOutdatedMessage =
   Event $ \p ->
-  logDIO ERROR $
+  logDIO WARNING $
   "t = " ++ (show $ pointTime p) ++
-  ": received the outdated message"
+  ": skipping the outdated message"
 
 -- | Reduce events till the specified time.
 reduceEvents :: Double -> Event DIO ()
@@ -588,7 +614,7 @@ syncLocalTime m =
                                 Just _  ->
                                   invokeTimeWarp p $ syncLocalTime m
                                 Nothing ->
-                                  do invokeEvent p requestGlobalTime
+                                  do -- invokeEvent p requestGlobalTime
                                      invokeTimeWarp p $ syncLocalTime0 m
                       else return ()
   
@@ -662,7 +688,7 @@ handleEventRetry e =
   do let q = runEventQueue $ pointRun p
          t = pointTime p
      ---
-     logDIO NOTICE $
+     logDIO INFO $
        "t = " ++ show t ++
        ": retrying the computations..."
      ---
@@ -702,3 +728,36 @@ handleEventRetry e =
                     "Detected a deadlock when retrying the computations: handleEventRetry\n" ++
                     "--- the nested exception ---\n" ++ show e 
      loop
+
+-- | Reconnect to the remote process.
+reconnectProcess :: DP.ProcessId -> Event DIO ()
+reconnectProcess pid =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     logDIO NOTICE $
+       "t = " ++ show (pointTime p) ++
+       ": reconnecting to " ++ show pid ++ "..."
+     ---
+     infind <- liftIOUnsafe $ readIORef (queueInFind q)
+     let ys = queueInputMessages q
+     ys' <- liftIOUnsafe $
+            fmap (map $ acknowledgmentMessage infind) $
+            filterInputMessages (\x -> messageSenderId x == pid) ys
+     unless (null ys') $
+       sendAcknowledgmentMessagesDIO pid ys'
+     xs <- liftIOUnsafe $ transientMessages (queueTransientMessages q)
+     let xs' = filter (\x -> messageReceiverId x == pid) xs
+     unless (null xs') $
+       sendMessagesDIO pid xs'
+
+-- | A signal triggered when coming the process monitor notification from the Cloud Haskell back-end.
+processMonitorSignal :: Signal DIO DP.ProcessMonitorNotification
+processMonitorSignal =
+  Signal { handleSignal = \h ->
+            Event $ \p ->
+            let q = runEventQueue (pointRun p)
+                s = publishSignal (queueProcessMonitorNotificationSource q)
+            in invokeEvent p $
+               handleSignal s h
+         }

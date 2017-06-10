@@ -1,5 +1,5 @@
 
-{--# LANGUAGE TemplateHaskell #--}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -20,6 +20,25 @@
 -- model MachRep1, let’s also find the long-run proportion of the time 
 -- that a given machine does not have immediate access to the repairperson 
 -- when the machine breaks down. Output values should be about 0.6 and 0.67. 
+
+-- Compiling and Running
+---
+-- Compile using
+--
+-- ghc -threaded MachRep2Distributed.hs
+--
+-- Fire up some slave nodes (for the example, we run them on a single machine):
+--
+-- ./MachRep2DistributedReproducible slave localhost 8080 &
+-- ./MachRep2DistributedReproducible slave localhost 8081 &
+-- ./MachRep2DistributedReproducible slave localhost 8082 &
+--
+-- And start the master node:
+--
+-- ./MachRep2DistributedReproducible master localhost 8088
+--
+
+import System.Environment (getArgs)
 
 import Data.Typeable
 import Data.Binary
@@ -218,7 +237,12 @@ runSlaveModel (timeServerId, masterId, i) =
             runSimulation (slaveModel masterId i) specs
             unregisterDIO
 
--- remotable ['runSlaveModel, 'timeServer]
+startSlaveModel :: (DP.ProcessId, DP.ProcessId, Int) -> DP.Process ()
+startSlaveModel x@(timeServerId, masterId, i) =
+  do (slaveId, slaveProcess) <- runSlaveModel x
+     slaveProcess
+
+remotable ['startSlaveModel, 'curryTimeServer]
 
 runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (Double, Double))
 runMasterModel timeServerId n =
@@ -232,22 +256,31 @@ runMasterModel timeServerId n =
 
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
-     let n = length seeds
+     let [n0, n1, n2] = nodes
          timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
-     timeServerId <- DP.spawnLocal $ timeServer 3 timeServerParams
-     (masterId, masterProcess) <- runMasterModel timeServerId n
-     forM_ [1..n] $ \i ->
-       do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId, i)
-          DP.spawnLocal slaveProcess
+     -- timeServerId <- DP.spawnLocal $ timeServer timeServerParams
+     timeServerId <- DP.spawn n0 ($(mkClosure 'curryTimeServer) (3 :: Int, timeServerParams))
+     -- (masterId, masterProcess) <- runMasterModel timeServerId 2
+     -- forM_ [1..2] $ \i ->
+     --   do (slaveId, slaveProcess) <- runSlaveModel (timeServerId, masterId)
+     --      DP.spawnLocal slaveProcess
+     (masterId, masterProcess) <- runMasterModel timeServerId 2
+     forM_ (zip [n1, n2] [(1 :: Int)..]) $ \(node, i) ->
+        DP.spawn node ($(mkClosure 'startSlaveModel) (timeServerId, masterId, i))
      a <- masterProcess
      DP.say $
        "The result is " ++ show a
-  
+
 main :: IO ()
 main = do
-  backend <- initializeBackend "localhost" "8080" rtable
-  startMaster backend (master backend)
-    where
-      rtable :: DP.RemoteTable
-      -- rtable = __remoteTable initRemoteTable
-      rtable = initRemoteTable
+  args <- getArgs
+  case args of
+    ["master", host, port] -> do
+      backend <- initializeBackend host port rtable
+      startMaster backend (master backend)
+    ["slave", host, port] -> do
+      backend <- initializeBackend host port rtable
+      startSlave backend
+  where
+    rtable :: DP.RemoteTable
+    rtable = __remoteTable initRemoteTable
