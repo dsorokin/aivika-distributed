@@ -72,7 +72,7 @@ newSlaveGuard =
        writeRef r True
      return SlaveGuard { slaveGuardAcknowledged = r }
 
--- | Await until the specified number of slaves is connected to the master.
+-- | Await until the specified number of slaves are connected to the master.
 awaitMasterGuard :: MasterGuard -> Int -> Event DIO ()
 awaitMasterGuard guard n =
   Event $ \p ->
