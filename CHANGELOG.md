@@ -1,4 +1,9 @@
 
+Version 0.5.1
+-----
+
+* Added functions expectEvent and expectProcess.
+
 Version 0.5
 -----
 

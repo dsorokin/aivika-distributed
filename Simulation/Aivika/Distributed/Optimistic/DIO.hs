@@ -25,6 +25,8 @@ module Simulation.Aivika.Distributed.Optimistic.DIO
         unregisterDIO,
         monitorProcessDIO,
         InboxProcessMessage(MonitorProcessMessage),
+        expectEvent,
+        expectProcess,
         processMonitorSignal) where
 
 import Control.Monad
@@ -39,6 +41,10 @@ import Simulation.Aivika.Trans.Composite
 import Simulation.Aivika.Trans.Process
 import Simulation.Aivika.Trans.Ref.Base
 import Simulation.Aivika.Trans.QueueStrategy
+import Simulation.Aivika.Trans.Internal.Types
+import Simulation.Aivika.Trans.Internal.Event
+import Simulation.Aivika.Trans.Internal.Cont
+import Simulation.Aivika.Trans.Internal.Process
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
@@ -59,3 +65,21 @@ instance {-# OVERLAPPING #-} MonadIO (Process DIO) where
 
 instance {-# OVERLAPPING #-} MonadIO (Composite DIO) where
   liftIO = liftEvent . liftIO
+
+-- | Suspend the 'Process' until the specified computation is determined.
+-- The testing computation should depend on messages that come from other local processes.
+expectProcess :: Event DIO (Maybe a) -> Process DIO a
+expectProcess m =
+  Process $ \pid ->
+  Cont $ \c ->
+  Event $ \p ->
+  do let t = pointTime p
+     invokeEvent p $
+       expectEvent $
+       do x <- m
+          case x of
+            Just a ->
+              do enqueueEvent t $ resumeCont c a
+                 return True
+            Nothing ->
+              return False

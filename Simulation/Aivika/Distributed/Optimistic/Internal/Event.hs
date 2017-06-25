@@ -15,6 +15,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
        (queueInputMessages,
         queueOutputMessages,
         queueLog,
+        expectEvent,
         processMonitorSignal) where
 
 import Data.Maybe
@@ -761,3 +762,55 @@ processMonitorSignal =
             in invokeEvent p $
                handleSignal s h
          }
+
+-- | Suspend the 'Event' computation until the specified predicate is satisfied.
+-- The predicate should depend on messages that come from other local processes.
+expectEvent :: Event DIO Bool -> Event DIO ()
+expectEvent m =
+  Event $ \p ->
+  do let t = pointTime p
+     ---
+     logDIO INFO $
+       "t = " ++ show t ++
+       ": expecting the event..."
+     ---
+     let loop =
+           do x <- invokeEvent p m
+              case x of
+                True  -> return ()
+                False ->
+                  do ---
+                     --- logDIO DEBUG $
+                     ---   "t = " ++ show t ++
+                     ---   ": waiting for the event..."
+                     ---
+                    ch <- messageChannel
+                    dt <- fmap dioSyncTimeout dioParams
+                    f  <- liftIOUnsafe $
+                          timeout dt $ awaitChannel ch
+                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
+                    when ok $
+                      case f of
+                        Just _  -> loop
+                        Nothing -> loop0
+         loop0 =
+           do x <- invokeEvent p m
+              case x of
+                True  -> return ()
+                False ->
+                  do ---
+                     --- logDIO DEBUG $
+                     ---   "t = " ++ show t ++
+                     ---   ": waiting for the event in ring 0..."
+                     ---
+                     ch <- messageChannel
+                     dt <- fmap dioSyncTimeout dioParams
+                     f  <- liftIOUnsafe $
+                           timeout dt $ awaitChannel ch
+                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
+                     when ok $
+                       case f of
+                         Just _  -> loop
+                         Nothing ->
+                           error "Detected a deadlock when expecting the event: expectEvent"
+     loop
