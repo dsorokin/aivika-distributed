@@ -75,6 +75,7 @@ expectProcess m =
   Event $ \p ->
   do let t = pointTime p
      invokeEvent p $
+       enqueueEvent t $
        expectEvent $
        do x <- m
           case x of

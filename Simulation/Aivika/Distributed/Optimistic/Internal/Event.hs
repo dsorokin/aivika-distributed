@@ -765,6 +765,9 @@ processMonitorSignal =
 
 -- | Suspend the 'Event' computation until the specified predicate is satisfied.
 -- The predicate should depend on messages that come from other local processes.
+--
+-- The function call should be placed in 'enqueueEvent' so that the computation
+-- would be called repeatedely in case of roll-backs.
 expectEvent :: Event DIO Bool -> Event DIO ()
 expectEvent m =
   Event $ \p ->

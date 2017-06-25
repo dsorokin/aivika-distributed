@@ -4,6 +4,8 @@ Version 0.5.1
 
 * Added functions expectEvent and expectProcess.
 
+* Added the Guard module.
+
 Version 0.5
 -----
 
