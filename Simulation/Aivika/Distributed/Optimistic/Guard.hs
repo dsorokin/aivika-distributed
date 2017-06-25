@@ -51,7 +51,7 @@ data MasterGuard = MasterGuard { masterGuardSlaveIds :: Ref DIO (S.Set DP.Proces
                                  -- ^ the slaves connected to the master
                                }
 
--- | Represents the slave guard that waits for the master to acknowledge it.
+-- | Represents the slave guard that waits for the master's acknowledgement.
 data SlaveGuard = SlaveGuard { slaveGuardAcknowledged :: Ref DIO Bool
                                -- ^ whether the slave process was acknowledged by the master
                              }
