@@ -784,15 +784,15 @@ expectEvent m =
                      ---   "t = " ++ show t ++
                      ---   ": waiting for the event..."
                      ---
-                    ch <- messageChannel
-                    dt <- fmap dioSyncTimeout dioParams
-                    f  <- liftIOUnsafe $
-                          timeout dt $ awaitChannel ch
-                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
-                    when ok $
-                      case f of
-                        Just _  -> loop
-                        Nothing -> loop0
+                     ch <- messageChannel
+                     dt <- fmap dioSyncTimeout dioParams
+                     f  <- liftIOUnsafe $
+                           timeout dt $ awaitChannel ch
+                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
+                     when ok $
+                       case f of
+                         Just _  -> loop
+                         Nothing -> loop0
          loop0 =
            do x <- invokeEvent p m
               case x of
