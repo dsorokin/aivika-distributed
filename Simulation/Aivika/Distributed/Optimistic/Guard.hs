@@ -46,12 +46,12 @@ newtype SlaveMessage = SlaveMessage DP.ProcessId
 instance Binary MasterMessage
 instance Binary SlaveMessage
 
--- | Represents the master guard that waits all slaves to finish.
+-- | Represents the master guard that waits for all slaves to finish.
 data MasterGuard = MasterGuard { masterGuardSlaveIds :: Ref DIO (S.Set DP.ProcessId)
                                  -- ^ the slaves connected to the master
                                }
 
--- | Represents the slave guard that waits the master to acknowledge it.
+-- | Represents the slave guard that waits for the master to acknowledge it.
 data SlaveGuard = SlaveGuard { slaveGuardAcknowledged :: Ref DIO Bool
                                -- ^ whether the slave process was acknowledged by the master
                              }
