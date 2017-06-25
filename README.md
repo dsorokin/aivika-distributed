@@ -24,7 +24,7 @@ the Monte-Carlo method. They allow you to save the simulation results in SQL dat
 or a set of reports consisting of HTML pages with charts, histograms, links to CSV tables, summary statistics etc.
 Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more details.
 
-Regarding the speed of simulation, the rough estimations are as follows. The simulation is slower up to
+Regarding the speed of simulation, the rough estimations are as follows. The distributed simulation module is slower up to
 6-9 times in comparison with the sequential [aivika](http://hackage.haskell.org/package/aivika) simulation library 
 using the equivalent sequential models. Note that you can run up to 7 parallel local processes on a single 
 8-core processor computer and run the Time Server process too. On a 36-core processor, you can launch up to 35 local 
