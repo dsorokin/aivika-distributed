@@ -81,6 +81,7 @@ library
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.Channel
                      Simulation.Aivika.Distributed.Optimistic.Internal.DIO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Event
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Expect
                      Simulation.Aivika.Distributed.Optimistic.Internal.InputMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.IO
                      Simulation.Aivika.Distributed.Optimistic.Internal.KeepAliveManager
@@ -105,7 +106,7 @@ library
                      containers >= 0.4.0.0,
                      exceptions >= 0.8.0.2,
                      distributed-process >= 0.6.1,
-                     aivika >= 5.1,
+                     aivika >= 5.1.1,
                      aivika-transformers >= 5.1
 
     extensions:      MultiParamTypeClasses,

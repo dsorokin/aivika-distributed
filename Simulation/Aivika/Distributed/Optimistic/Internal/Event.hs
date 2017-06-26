@@ -33,6 +33,9 @@ import qualified Simulation.Aivika.PriorityQueue.Pure as PQ
 
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Trans.Internal.Types
+import Simulation.Aivika.Trans.Internal.Event
+import Simulation.Aivika.Trans.Internal.Cont
+import Simulation.Aivika.Trans.Internal.Process
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Channel
@@ -763,57 +766,65 @@ processMonitorSignal =
                handleSignal s h
          }
 
--- | Suspend the 'Event' computation until the specified predicate is satisfied.
--- The predicate should depend on messages that come from other local processes.
+
+-- | Suspend the 'Event' computation until the specified computation is determined.
 --
--- The function call should be placed in 'enqueueEvent' so that the computation
--- would be called repeatedely in case of roll-backs.
-expectEvent :: Event DIO Bool -> Event DIO ()
-expectEvent m =
+-- The tested computation should depend on messages that come from other local processes.
+-- Moreover, the event must be initiated through the event queue.
+expectEvent :: Event DIO (Maybe a) -> (a -> Event DIO ()) -> Event DIO ()
+expectEvent m cont =
   Event $ \p ->
-  do let t = pointTime p
+  do let q = runEventQueue $ pointRun p
+         t = pointTime p
      ---
      logDIO INFO $
-       "t = " ++ show t ++
-       ": expecting the event..."
+       "t = " ++ show (pointTime p) ++
+       ": expecting the computation result: expectEvent"
      ---
      let loop =
-           do x <- invokeEvent p m
+           do ---
+              --- logDIO DEBUG $
+              ---   "t = " ++ show (pointTime p) ++
+              ---   ": testing the predicate: expectEvent"
+              ---
+              x <- invokeEvent p m
               case x of
-                True  -> return ()
-                False ->
-                  do ---
-                     --- logDIO DEBUG $
-                     ---   "t = " ++ show t ++
-                     ---   ": waiting for the event..."
-                     ---
-                     ch <- messageChannel
-                     dt <- fmap dioSyncTimeout dioParams
-                     f  <- liftIOUnsafe $
-                           timeout dt $ awaitChannel ch
-                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
-                     when ok $
-                       case f of
-                         Just _  -> loop
-                         Nothing -> loop0
+                Just a  -> invokeEvent p $ cont a
+                Nothing -> next loop0
          loop0 =
-           do x <- invokeEvent p m
+           do ---
+              --- logDIO DEBUG $
+              ---   "t = " ++ show (pointTime p) ++
+              ---   ": testing the predicate in ring 0: expectEvent"
+              ---
+              x <- invokeEvent p m
               case x of
-                True  -> return ()
-                False ->
-                  do ---
-                     --- logDIO DEBUG $
-                     ---   "t = " ++ show t ++
-                     ---   ": waiting for the event in ring 0..."
-                     ---
-                     ch <- messageChannel
-                     dt <- fmap dioSyncTimeout dioParams
-                     f  <- liftIOUnsafe $
-                           timeout dt $ awaitChannel ch
-                     ok <- invokeEvent p $ runTimeWarp processChannelMessages
-                     when ok $
-                       case f of
-                         Just _  -> loop
-                         Nothing ->
-                           error "Detected a deadlock when expecting the event: expectEvent"
+                Just a  -> invokeEvent p $ cont a
+                Nothing -> next $ error "Detected a deadlock: expectEvent"
+         next loop' =
+           do pq <- invokeEvent p $ R.readRef $ queuePQ q
+              let f = PQ.queueNull pq
+              if f
+                then await loop'
+                else do let (t2, _) = PQ.queueFront pq
+                        if t < t2
+                          then await loop'
+                          else invokeEvent p $
+                               enqueueEvent t $
+                               Event $ \p -> loop
+         await loop' =
+           do ---
+              --- logDIO DEBUG $
+              ---   "t = " ++ show t ++
+              ---   ": waiting for arriving a message: expectEvent"
+              ---
+              ch <- messageChannel
+              dt <- fmap dioSyncTimeout dioParams
+              f  <- liftIOUnsafe $
+                    timeout dt $ awaitChannel ch
+              ok <- invokeEvent p $ runTimeWarp processChannelMessages
+              when ok $
+                case f of
+                  Just _  -> loop
+                  Nothing -> loop'
      loop

@@ -71,7 +71,8 @@ slaveModel masterId =
 
      runProcessInStartTime machine
 
-     guard <- runEventInStartTime newSlaveGuard
+     runEventInStartTime $
+       enableSlaveGuard masterId
 
      runEventInStartTime $
        enqueueEventIOWithStopTime $
@@ -79,7 +80,7 @@ slaveModel masterId =
             putStrLn "The sub-model finished"
 
      runEventInStopTime $
-       awaitSlaveGuard guard masterId
+       return ()
 
 -- | The main model.       
 masterModel :: Int -> Simulation DIO Double
@@ -95,7 +96,8 @@ masterModel n =
        modifyRef totalUpTime (+ runTotalUpTimeChange x)
      ---
 
-     guard <- runEventInStartTime newMasterGuard
+     runEventInStartTime $
+       enableMasterGuard n
 
      let upTimeProp =
            do x <- readRef totalUpTime
@@ -103,8 +105,7 @@ masterModel n =
               return $ x / (fromIntegral n * y)
 
      runEventInStopTime $
-       do awaitMasterGuard guard n
-          liftIO $
+       do liftIO $
             putStrLn "The main model finished"
           upTimeProp
 

@@ -12,12 +12,8 @@
 -- This module defines guards that allow correct finishing the distributed simulation.
 --
 module Simulation.Aivika.Distributed.Optimistic.Guard
-       (MasterGuard,
-        SlaveGuard,
-        newMasterGuard,
-        newSlaveGuard,
-        awaitMasterGuard,
-        awaitSlaveGuard)  where
+       (enableMasterGuard,
+        enableSlaveGuard)  where
 
 import GHC.Generics
 
@@ -32,6 +28,7 @@ import Control.Distributed.Process.Serializable
 
 import Simulation.Aivika.Trans
 import Simulation.Aivika.Trans.Internal.Types
+import Simulation.Aivika.Distributed.Optimistic.Internal.Expect
 import Simulation.Aivika.Distributed.Optimistic.DIO
 import Simulation.Aivika.Distributed.Optimistic.Message
 
@@ -73,29 +70,41 @@ newSlaveGuard =
      return SlaveGuard { slaveGuardAcknowledged = r }
 
 -- | Await until the specified number of slaves are connected to the master.
-awaitMasterGuard :: MasterGuard -> Int -> Event DIO ()
+awaitMasterGuard :: MasterGuard -> Int -> Process DIO ()
 awaitMasterGuard guard n =
-  Event $ \p ->
-  do let t = pointTime p
-     invokeEvent p $
-       enqueueEvent t $
-       expectEvent $
-       do s <- readRef $ masterGuardSlaveIds guard
-          if S.size s < n
-            then return False
-            else do inboxId <- liftComp messageInboxId
-                    forM_ (S.elems s) $ \slaveId ->
-                      sendMessage slaveId (MasterMessage inboxId)
-                    return True
+  expectProcess $
+  do s <- readRef $ masterGuardSlaveIds guard
+     if S.size s < n
+       then return Nothing
+       else do inboxId <- liftComp messageInboxId
+               forM_ (S.elems s) $ \slaveId ->
+                 sendMessage slaveId (MasterMessage inboxId)
+               return $ Just ()
 
 -- | Await until the specified master receives notifications from the slave processes.
-awaitSlaveGuard :: SlaveGuard -> DP.ProcessId -> Event DIO ()
+awaitSlaveGuard :: SlaveGuard -> DP.ProcessId -> Process DIO ()
 awaitSlaveGuard guard masterId =
-  Event $ \p ->
-  do let t = pointTime p
-     invokeEvent p $
+  do liftEvent $
        do inboxId <- liftComp messageInboxId
           sendMessage masterId (SlaveMessage inboxId)
-          enqueueEvent t $
-            expectEvent $
-            readRef $ slaveGuardAcknowledged guard
+     expectProcess $
+       do f <- readRef $ slaveGuardAcknowledged guard
+          if f
+            then return $ Just ()
+            else return Nothing
+
+-- | Enable the master guard by the specified number of slaves.
+enableMasterGuard :: Int -> Event DIO ()
+enableMasterGuard n =
+  do guard <- newMasterGuard
+     enqueueEventWithStopTime $
+       runProcess $
+       awaitMasterGuard guard n
+
+-- | Enable the slave guard by the specified master process identifier.
+enableSlaveGuard :: DP.ProcessId -> Event DIO ()
+enableSlaveGuard masterId =
+  do guard <- newSlaveGuard
+     enqueueEventWithStopTime $
+       runProcess $
+       awaitSlaveGuard guard masterId
