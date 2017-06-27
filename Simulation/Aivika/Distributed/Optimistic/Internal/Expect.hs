@@ -29,6 +29,9 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Event
 --  
 -- The tested computation should depend on messages that come from other local processes.
 -- Moreover, the process must be initiated through the event queue.
+--
+-- In the current implementation there is a limitation that this function can be used only
+-- once for the entire local process simulation; otherwise, a race condition may arise.
 expectProcess :: Event DIO (Maybe a) -> Process DIO a
 expectProcess m =
   Process $ \pid ->
