@@ -71,8 +71,8 @@ slaveModel masterId =
 
      runProcessInStartTime machine
 
-     runEventInStartTime $
-       enableSlaveGuard masterId
+     runProcessInStartTime $
+       runSlaveGuard_ masterId
 
      runEventInStartTime $
        enqueueEventIOWithStopTime $
@@ -96,8 +96,8 @@ masterModel n =
        modifyRef totalUpTime (+ runTotalUpTimeChange x)
      ---
 
-     runEventInStartTime $
-       enableMasterGuard n
+     runProcessInStartTime $
+       runMasterGuard_ n
 
      let upTimeProp =
            do x <- readRef totalUpTime
