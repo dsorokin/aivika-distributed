@@ -37,7 +37,7 @@ import Simulation.Aivika.Distributed.Optimistic.DIO
 import Simulation.Aivika.Distributed.Optimistic.Message
 
 -- | Represent the master message.
-data MasterMessage a = MasterMessage DP.ProcessId a
+data MasterMessage a = MasterMessage DP.ProcessId (Maybe a)
                      deriving (Show, Typeable, Generic)
 
 -- | Represent the slave message.
@@ -53,7 +53,7 @@ data MasterGuard a = MasterGuard { masterGuardSlaveMessages :: Ref DIO (M.Map DP
                                  }
 
 -- | Represents the slave guard that waits for the master's acknowledgement.
-data SlaveGuard a = SlaveGuard { slaveGuardAcknowledgedMessage :: Ref DIO (Maybe a)
+data SlaveGuard a = SlaveGuard { slaveGuardAcknowledgedMessage :: Ref DIO (Maybe (Maybe a))
                                  -- ^ whether the slave process was acknowledged by the master
                                }
 
@@ -74,20 +74,36 @@ newSlaveGuard =
      return SlaveGuard { slaveGuardAcknowledgedMessage = r }
 
 -- | Await until the specified number of slaves are connected to the master.
-awaitMasterGuard :: Serializable b => MasterGuard a -> Int -> (M.Map DP.ProcessId a -> Event DIO b) -> Process DIO b
+awaitMasterGuard :: Serializable b
+                    => MasterGuard a
+                    -- ^ the master guard
+                    -> Int
+                    -- ^ the number of slaves to wait
+                    -> (M.Map DP.ProcessId a -> Event DIO (M.Map DP.ProcessId b))
+                    -- ^ process the messages sent by slaves
+                    -> Process DIO (M.Map DP.ProcessId b)
 awaitMasterGuard guard n transform =
   expectProcess $
   do m <- readRef $ masterGuardSlaveMessages guard
      if M.size m < n
        then return Nothing
-       else do b <- transform m
+       else do m' <- transform m
                inboxId <- liftComp messageInboxId
                forM_ (M.keys m) $ \slaveId ->
-                 sendMessage slaveId (MasterMessage inboxId b)
-               return $ Just b
+                 sendMessage slaveId (MasterMessage inboxId $ M.lookup slaveId m')
+               return $ Just m'
 
 -- | Await until the specified master receives notifications from the slave processes.
-awaitSlaveGuard :: (Serializable a, Serializable b) => SlaveGuard a -> DP.ProcessId -> Event DIO b -> Process DIO a
+awaitSlaveGuard :: (Serializable a,
+                    Serializable b)
+                   => SlaveGuard a
+                   -- ^ the slave guard
+                   -> DP.ProcessId
+                   -- ^ the master process identifier
+                   -> Event DIO b
+                   -- ^ the message generator
+                   -> Process DIO (Maybe a)
+                   -- ^ the master's reply
 awaitSlaveGuard guard masterId generator =
   do liftEvent $
        do b <- generator
@@ -101,9 +117,9 @@ runMasterGuard :: (Serializable a,
                    Serializable b)
                   => Int
                   -- ^ the number of slaves to wait
-                  -> (M.Map DP.ProcessId a -> Event DIO b)
+                  -> (M.Map DP.ProcessId a -> Event DIO (M.Map DP.ProcessId b))
                   -- ^ how to transform the messages from the slave processes in the stop time
-                  -> Process DIO b
+                  -> Process DIO (M.Map DP.ProcessId b)
 runMasterGuard n transform =
   do source <- liftSimulation newSignalSource
      liftEvent $
@@ -122,7 +138,7 @@ runSlaveGuard :: (Serializable a,
                  -- ^ the master process identifier
                  -> Event DIO a
                  -- ^ in the stop time generate a message to pass to the master process
-                 -> Process DIO b
+                 -> Process DIO (Maybe b)
                  -- ^ the message returned by the master process
 runSlaveGuard masterId generator =
   do source <- liftSimulation newSignalSource
@@ -137,12 +153,14 @@ runSlaveGuard masterId generator =
 
 -- | Run the master guard by the specified number of slaves when there is no message passing.
 runMasterGuard_ :: Int -> Process DIO ()
-runMasterGuard_ n = runMasterGuard n transform
-  where transform :: M.Map DP.ProcessId () -> Event DIO ()
-        transform m = return ()
+runMasterGuard_ n =
+  do _ <- runMasterGuard n transform :: Process DIO (M.Map DP.ProcessId ())
+     return ()
+       where transform m = return m
 
 -- | Run the slave guard by the specified master process identifier when there is no message passing.
 runSlaveGuard_ :: DP.ProcessId -> Process DIO ()
-runSlaveGuard_ masterId = runSlaveGuard masterId generator
-  where generator :: Event DIO ()
-        generator = return ()
+runSlaveGuard_ masterId =
+  do _ <- runSlaveGuard masterId generator :: Process DIO (Maybe ())
+     return ()
+       where generator = return ()
