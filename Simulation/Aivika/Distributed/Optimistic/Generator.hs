@@ -18,6 +18,7 @@ import Control.Monad
 import Control.Monad.Trans
 
 import System.Random
+import qualified System.Random.MWC as MWC
 
 import Data.IORef
 
@@ -69,7 +70,10 @@ instance MonadGenerator DIO where
   newGenerator tp =
     case tp of
       SimpleGenerator ->
-        liftIOUnsafe newStdGen >>= newRandomGenerator
+        do let g = MWC.uniform <$>
+                   MWC.withSystemRandom (return :: MWC.GenIO -> IO MWC.GenIO)
+           g' <- liftIOUnsafe g
+           newRandomGenerator01 (liftIOUnsafe g')
       SimpleGeneratorWithSeed x ->
         error "Unsupported generator type SimpleGeneratorWithSeed: newGenerator"
       CustomGenerator g ->
