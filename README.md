@@ -8,7 +8,7 @@ the Time Warp method. To synchronize the global virtual time, it uses Samadi's a
 Moreover, this package uses the author's modification that allows recovering the distributed
 simulation after temporary connection errors whenever possible. For that, you have to enable explicitly 
 the recovering mode and enable monitoring all local processes including the specialized Time Server process 
-as it is shown in one of the test examples included in the distributive.
+as it is shown in one of the test examples included in the distribution.
 
 With the recovering mode enabled, you can try to build a distributed simulation using ordinary computers connected
 via the ordinary net. For example, such a distributed model could even consist of computers located in different 
