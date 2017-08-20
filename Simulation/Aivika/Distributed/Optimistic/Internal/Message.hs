@@ -17,7 +17,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
         antiMessages,
         AcknowledgmentMessage(..),
         acknowledgmentMessage,
-        LocalProcessMessage(..),
+        LogicalProcessMessage(..),
         TimeServerMessage(..),
         InboxProcessMessage(..),
         KeepAliveMessage(..)) where
@@ -106,51 +106,51 @@ acknowledgmentMessage marked x =
                           acknowledgmentMarked = marked
                         }
 
--- | The message sent to the local process.
-data LocalProcessMessage = QueueMessage Message
-                           -- ^ the message has come from the remote process
-                         | QueueMessageBulk [Message]
-                           -- ^ a bulk of messages that have come from the remote process
-                         | AcknowledgmentQueueMessage AcknowledgmentMessage
-                           -- ^ the acknowledgment message has come from the remote process
-                         | AcknowledgmentQueueMessageBulk [AcknowledgmentMessage]
-                           -- ^ a bulk of acknowledgment messages that have come from the remote process
-                         | ComputeLocalTimeMessage
-                           -- ^ the time server requests for a local minimum time
-                         | GlobalTimeMessage Double
-                           -- ^ the time server sent a global time
-                         | ProcessMonitorNotificationMessage DP.ProcessMonitorNotification
-                           -- ^ the process monitor notification
-                         | ReconnectProcessMessage DP.ProcessId
-                           -- ^ finish reconnecting to the specified process
-                         | KeepAliveLocalProcessMessage KeepAliveMessage
-                           -- ^ the keep alive message for the local process
-                         deriving (Show, Typeable, Generic)
+-- | The message sent to the logical process.
+data LogicalProcessMessage = QueueMessage Message
+                             -- ^ the message has come from the remote process
+                           | QueueMessageBulk [Message]
+                             -- ^ a bulk of messages that have come from the remote process
+                           | AcknowledgmentQueueMessage AcknowledgmentMessage
+                             -- ^ the acknowledgment message has come from the remote process
+                           | AcknowledgmentQueueMessageBulk [AcknowledgmentMessage]
+                             -- ^ a bulk of acknowledgment messages that have come from the remote process
+                           | ComputeLocalTimeMessage
+                             -- ^ the time server requests for a local minimum time
+                           | GlobalTimeMessage Double
+                             -- ^ the time server sent a global time
+                           | ProcessMonitorNotificationMessage DP.ProcessMonitorNotification
+                             -- ^ the process monitor notification
+                           | ReconnectProcessMessage DP.ProcessId
+                             -- ^ finish reconnecting to the specified process
+                           | KeepAliveLogicalProcessMessage KeepAliveMessage
+                             -- ^ the keep alive message for the logical process
+                           deriving (Show, Typeable, Generic)
 
-instance Binary LocalProcessMessage
+instance Binary LogicalProcessMessage
 
 -- | The time server message.
-data TimeServerMessage = RegisterLocalProcessMessage DP.ProcessId
-                         -- ^ register the local process in the time server
-                       | UnregisterLocalProcessMessage DP.ProcessId
-                         -- ^ unregister the local process from the time server
+data TimeServerMessage = RegisterLogicalProcessMessage DP.ProcessId
+                         -- ^ register the logical process in the time server
+                       | UnregisterLogicalProcessMessage DP.ProcessId
+                         -- ^ unregister the logical process from the time server
                        | TerminateTimeServerMessage DP.ProcessId
-                         -- ^ the local process asked to terminate the time server
+                         -- ^ the logical process asked to terminate the time server
                        | RequestGlobalTimeMessage DP.ProcessId
-                         -- ^ the local process requested for the global minimum time
+                         -- ^ the logical process requested for the global minimum time
                        | LocalTimeMessage DP.ProcessId Double
-                         -- ^ the local process sent its local minimum time
+                         -- ^ the logical process sent its local minimum time
                        | ReMonitorTimeServerMessage [DP.ProcessId]
-                         -- ^ re-monitor the local processes by their identifiers
+                         -- ^ re-monitor the logical processes by their identifiers
                        deriving (Eq, Show, Typeable, Generic)
 
 instance Binary TimeServerMessage
 
 -- | The message destined directly for the inbox process.
 data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
-                           -- ^ monitor the local process by its inbox process identifier
+                           -- ^ monitor the logical process by its inbox process identifier
                          | ReMonitorProcessMessage [DP.ProcessId]
-                           -- ^ re-monitor the local processes by their identifiers
+                           -- ^ re-monitor the logical processes by their identifiers
                          | TrySendKeepAliveMessage
                            -- ^ try to send a keep alive message
                          | SendQueueMessage DP.ProcessId Message
@@ -165,16 +165,16 @@ data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
                            -- ^ send the local time message to the time server
                          | SendRequestGlobalTimeMessage DP.ProcessId DP.ProcessId
                            -- ^ send the request for the global virtual time
-                         | SendRegisterLocalProcessMessage DP.ProcessId DP.ProcessId
-                           -- ^ register the local process in the time server
-                         | SendUnregisterLocalProcessMessage DP.ProcessId DP.ProcessId
-                           -- ^ unregister the local process from the time server
+                         | SendRegisterLogicalProcessMessage DP.ProcessId DP.ProcessId
+                           -- ^ register the logical process in the time server
+                         | SendUnregisterLogicalProcessMessage DP.ProcessId DP.ProcessId
+                           -- ^ unregister the logical process from the time server
                          | SendTerminateTimeServerMessage DP.ProcessId DP.ProcessId
-                           -- ^ the local process asked to terminate the time server
-                         | RegisterLocalProcessAcknowledgmentMessage DP.ProcessId
-                           -- ^ after registering the local process in the time server
-                         | UnregisterLocalProcessAcknowledgmentMessage DP.ProcessId
-                           -- ^ after unregistering the local process from the time server
+                           -- ^ the logical process asked to terminate the time server
+                         | RegisterLogicalProcessAcknowledgmentMessage DP.ProcessId
+                           -- ^ after registering the logical process in the time server
+                         | UnregisterLogicalProcessAcknowledgmentMessage DP.ProcessId
+                           -- ^ after unregistering the logical process from the time server
                          | TerminateTimeServerAcknowledgmentMessage DP.ProcessId
                            -- ^ after started terminating the time server
                          | TerminateInboxProcessMessage

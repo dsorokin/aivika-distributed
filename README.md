@@ -7,7 +7,7 @@ the Time Warp method. To synchronize the global virtual time, it uses Samadi's a
 
 Moreover, this package uses the author's modification that allows recovering the distributed
 simulation after temporary connection errors whenever possible. For that, you have to enable explicitly 
-the recovering mode and enable monitoring all local processes including the specialized Time Server process 
+the recovering mode and enable monitoring all logical processes including the specialized Time Server process 
 as it is shown in one of the test examples included in the distribution.
 
 With the recovering mode enabled, you can try to build a distributed simulation using ordinary computers connected
@@ -26,10 +26,10 @@ Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more deta
 
 Regarding the speed of simulation, the rough estimations are as follows. The distributed simulation module is slower up to
 6-9 times in comparison with the sequential [aivika](http://hackage.haskell.org/package/aivika) simulation library 
-using the equivalent sequential models. Note that you can run up to 7 parallel local processes on a single 
-8-core processor computer and run the Time Server process too. On a 36-core processor, you can launch up to 35 local 
+using the equivalent sequential models. Note that you can run up to 7 parallel logical processes on a single 
+8-core processor computer and run the Time Server process too. On a 36-core processor, you can launch up to 35 logical 
 processes simultaneously.
 
-So, this estimation seems to be quite good. At the same time, the message passing between the local processes can 
+So, this estimation seems to be quite good. At the same time, the message passing between the logical processes can 
 dramatically decrease the speed of distributed simulation, especially if they cause rollbacks. Thus, much depends on 
 the distributed model itself.

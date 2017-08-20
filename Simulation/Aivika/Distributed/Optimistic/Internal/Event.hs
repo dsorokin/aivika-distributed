@@ -322,7 +322,7 @@ processChannelMessages =
        invokeTimeWarp p' throttleMessageChannel
 
 -- | Process the channel message.
-processChannelMessage :: LocalProcessMessage -> TimeWarp DIO ()
+processChannelMessage :: LogicalProcessMessage -> TimeWarp DIO ()
 processChannelMessage x@(QueueMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -422,7 +422,7 @@ processChannelMessage x@(ReconnectProcessMessage pid) =
      ---
      invokeEvent p $
        reconnectProcess pid
-processChannelMessage x@(KeepAliveLocalProcessMessage m) =
+processChannelMessage x@(KeepAliveLogicalProcessMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
@@ -494,7 +494,7 @@ showMessage m =
   showString " }"
 
 -- | Log the message at the specified time.
-logMessage :: LocalProcessMessage -> Event DIO ()
+logMessage :: LogicalProcessMessage -> Event DIO ()
 logMessage (QueueMessage m) =
   Event $ \p ->
   logDIO INFO $
@@ -769,7 +769,7 @@ processMonitorSignal =
 
 -- | Suspend the 'Event' computation until the specified computation is determined.
 --
--- The tested computation should depend on messages that come from other local processes.
+-- The tested computation should depend on messages that come from other logical processes.
 -- Moreover, the event must be initiated through the event queue.
 expectEvent :: Event DIO (Maybe a) -> (a -> Event DIO ()) -> Event DIO ()
 expectEvent m cont =

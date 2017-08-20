@@ -100,7 +100,7 @@ newtype DIO a = DIO { unDIO :: DIOContext -> DP.Process a
 
 -- | The context of the 'DIO' computation.
 data DIOContext =
-  DIOContext { dioChannel :: Channel LocalProcessMessage,
+  DIOContext { dioChannel :: Channel LogicalProcessMessage,
                -- ^ The channel of messages.
                dioInboxId :: DP.ProcessId,
                -- ^ The inbox process identifier.
@@ -186,7 +186,7 @@ dioParams :: DIO DIOParams
 dioParams = DIO $ return . dioParams0
 
 -- | Return the chanel of messages.
-messageChannel :: DIO (Channel LocalProcessMessage)
+messageChannel :: DIO (Channel LogicalProcessMessage)
 messageChannel = DIO $ return . dioChannel
 
 -- | Return the process identifier of the inbox that receives messages.
@@ -229,8 +229,8 @@ registerDIO =
      receiver <- invokeDIO ctx timeServerId
      let inbox = sender
      if dioProcessMonitoringEnabled ps
-       then DP.send inbox (SendRegisterLocalProcessMessage receiver sender)
-       else DP.send receiver (RegisterLocalProcessMessage sender)
+       then DP.send inbox (SendRegisterLogicalProcessMessage receiver sender)
+       else DP.send receiver (RegisterLogicalProcessMessage sender)
      liftIO $
        timeout (dioTimeServerAcknowledgmentTimeout ps) $
        atomically $
@@ -250,8 +250,8 @@ unregisterDIO =
      receiver <- invokeDIO ctx timeServerId
      let inbox = sender
      if dioProcessMonitoringEnabled ps
-       then DP.send inbox (SendUnregisterLocalProcessMessage receiver sender)
-       else DP.send receiver (UnregisterLocalProcessMessage sender)
+       then DP.send inbox (SendUnregisterLogicalProcessMessage receiver sender)
+       else DP.send receiver (UnregisterLogicalProcessMessage sender)
      liftIO $
        timeout (dioTimeServerAcknowledgmentTimeout ps) $
        atomically $
@@ -260,15 +260,15 @@ unregisterDIO =
      DP.send inbox TerminateInboxProcessMessage
      return ()
 
--- | The internal local process message.
-data InternalLocalProcessMessage = InternalLocalProcessMessage LocalProcessMessage
-                                   -- ^ the local process message
-                                 | InternalProcessMonitorNotification DP.ProcessMonitorNotification
-                                   -- ^ the process monitor notification
-                                 | InternalInboxProcessMessage InboxProcessMessage
-                                   -- ^ the inbox process message
-                                 | InternalKeepAliveMessage KeepAliveMessage
-                                   -- ^ the keep alive message
+-- | The internal logical process message.
+data InternalLogicalProcessMessage = InternalLogicalProcessMessage LogicalProcessMessage
+                                     -- ^ the logical process message
+                                   | InternalProcessMonitorNotification DP.ProcessMonitorNotification
+                                     -- ^ the process monitor notification
+                                   | InternalInboxProcessMessage InboxProcessMessage
+                                     -- ^ the inbox process message
+                                   | InternalKeepAliveMessage KeepAliveMessage
+                                     -- ^ the keep alive message
 
 -- | Handle the specified exception.
 handleException :: DIOParams -> SomeException -> DP.Process ()
@@ -293,18 +293,18 @@ runDIO m ps serverId =
      timeServerTerminating <- liftIO $ newTVarIO False
      let loop =
            forever $
-           do let f1 :: LocalProcessMessage -> DP.Process InternalLocalProcessMessage
-                  f1 x = return (InternalLocalProcessMessage x)
-                  f2 :: DP.ProcessMonitorNotification -> DP.Process InternalLocalProcessMessage
+           do let f1 :: LogicalProcessMessage -> DP.Process InternalLogicalProcessMessage
+                  f1 x = return (InternalLogicalProcessMessage x)
+                  f2 :: DP.ProcessMonitorNotification -> DP.Process InternalLogicalProcessMessage
                   f2 x = return (InternalProcessMonitorNotification x)
-                  f3 :: InboxProcessMessage -> DP.Process InternalLocalProcessMessage
+                  f3 :: InboxProcessMessage -> DP.Process InternalLogicalProcessMessage
                   f3 x = return (InternalInboxProcessMessage x)
-                  f4 :: KeepAliveMessage -> DP.Process InternalLocalProcessMessage
+                  f4 :: KeepAliveMessage -> DP.Process InternalLogicalProcessMessage
                   f4 x = return (InternalKeepAliveMessage x)
               x <- fmap Just $ DP.receiveWait [DP.match f1, DP.match f2, DP.match f3, DP.match f4]
               case x of
                 Nothing -> return ()
-                Just (InternalLocalProcessMessage m) ->
+                Just (InternalLogicalProcessMessage m) ->
                   liftIO $
                   writeChannel ch m
                 Just (InternalProcessMonitorNotification m@(DP.ProcessMonitorNotification _ _ _)) ->
@@ -325,10 +325,10 @@ runDIO m ps serverId =
                       DP.send receiver (LocalTimeMessage sender t)
                     SendRequestGlobalTimeMessage receiver sender ->
                       DP.send receiver (RequestGlobalTimeMessage sender)
-                    SendRegisterLocalProcessMessage receiver sender ->
-                      DP.send receiver (RegisterLocalProcessMessage sender)
-                    SendUnregisterLocalProcessMessage receiver sender ->
-                      DP.send receiver (UnregisterLocalProcessMessage sender)
+                    SendRegisterLogicalProcessMessage receiver sender ->
+                      DP.send receiver (RegisterLogicalProcessMessage sender)
+                    SendUnregisterLogicalProcessMessage receiver sender ->
+                      DP.send receiver (UnregisterLogicalProcessMessage sender)
                     SendTerminateTimeServerMessage receiver sender ->
                       DP.send receiver (TerminateTimeServerMessage sender)
                     MonitorProcessMessage pid ->
@@ -343,16 +343,16 @@ runDIO m ps serverId =
                       handleReMonitorProcessMessage pids ps ch
                     TrySendKeepAliveMessage ->
                       trySendKeepAlive keepAliveManager
-                    RegisterLocalProcessAcknowledgmentMessage pid ->
+                    RegisterLogicalProcessAcknowledgmentMessage pid ->
                       do ---
-                         logProcess ps INFO "Registered the local process in the time server"
+                         logProcess ps INFO "Registered the logical process in the time server"
                          ---
                          liftIO $
                            atomically $
                            writeTVar registeredInTimeServer True
-                    UnregisterLocalProcessAcknowledgmentMessage pid ->
+                    UnregisterLogicalProcessAcknowledgmentMessage pid ->
                       do ---
-                         logProcess ps INFO "Unregistered the local process from the time server"
+                         logProcess ps INFO "Unregistered the logical process from the time server"
                          ---
                          liftIO $
                            atomically $
@@ -376,7 +376,7 @@ runDIO m ps serverId =
                      logProcess ps DEBUG $ "Received " ++ show m
                      ---
                      liftIO $
-                       writeChannel ch (KeepAliveLocalProcessMessage m)
+                       writeChannel ch (KeepAliveLogicalProcessMessage m)
      inboxId <-
        DP.spawnLocal $
        C.catch loop (handleException ps)
@@ -400,7 +400,7 @@ runDIO m ps serverId =
      return (inboxId, simulation)
 
 -- | Handle the process monitor notification.
-handleProcessMonitorNotification :: DP.ProcessMonitorNotification -> DIOParams -> Channel LocalProcessMessage -> DP.Process ()
+handleProcessMonitorNotification :: DP.ProcessMonitorNotification -> DIOParams -> Channel LogicalProcessMessage -> DP.Process ()
 handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason) ps ch =
   do let recv m@(DP.ProcessMonitorNotification _ _ _) = 
            do ---
@@ -442,7 +442,7 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
           return ()
 
 -- | Re-monitor the specified remote processes.
-handleReMonitorProcessMessage :: [DP.ProcessId] -> DIOParams -> Channel LocalProcessMessage -> DP.Process ()
+handleReMonitorProcessMessage :: [DP.ProcessId] -> DIOParams -> Channel LogicalProcessMessage -> DP.Process ()
 handleReMonitorProcessMessage pids ps ch =
   forM_ pids $ \pid ->
   do ---

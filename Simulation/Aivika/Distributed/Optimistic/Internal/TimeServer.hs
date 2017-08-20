@@ -64,13 +64,13 @@ data TimeServer =
   TimeServer { tsParams :: TimeServerParams,
                -- ^ the time server parameters
                tsInitQuorum :: Int,
-               -- ^ the initial quorum of registered local processes to start the simulation
+               -- ^ the initial quorum of registered logical processes to start the simulation
                tsInInit :: IORef Bool,
                -- ^ whether the time server is in the initial mode
                tsTerminating :: IORef Bool,
                -- ^ whether the time server is in the terminating mode
-               tsProcesses :: IORef (M.Map DP.ProcessId LocalProcessInfo),
-               -- ^ the information about local processes
+               tsProcesses :: IORef (M.Map DP.ProcessId LogicalProcessInfo),
+               -- ^ the information about logical processes
                tsProcessesInFind :: IORef (S.Set DP.ProcessId),
                -- ^ the processed used in the current finding of the global time
                tsGlobalTime :: IORef (Maybe Double),
@@ -79,13 +79,13 @@ data TimeServer =
                -- ^ the global time timestamp
              }
 
--- | The information about the local process.
-data LocalProcessInfo =
-  LocalProcessInfo { lpLocalTime :: IORef (Maybe Double),
-                     -- ^ the local time of the process
-                     lpMonitorRef :: Maybe DP.MonitorRef
-                     -- ^ the local process monitor reference
-                   }
+-- | The information about the logical process.
+data LogicalProcessInfo =
+  LogicalProcessInfo { lpLocalTime :: IORef (Maybe Double),
+                       -- ^ the local time of the process
+                       lpMonitorRef :: Maybe DP.MonitorRef
+                       -- ^ the logical process monitor reference
+                     }
 
 -- | The default time server parameters.
 defaultTimeServerParams :: TimeServerParams
@@ -121,7 +121,7 @@ newTimeServer n ps =
 
 -- | Process the time server message.
 processTimeServerMessage :: TimeServer -> TimeServerMessage -> DP.Process ()
-processTimeServerMessage server (RegisterLocalProcessMessage pid) =
+processTimeServerMessage server (RegisterLogicalProcessMessage pid) =
   join $ liftIO $
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
@@ -132,7 +132,7 @@ processTimeServerMessage server (RegisterLocalProcessMessage pid) =
        Nothing  ->
          do t <- newIORef Nothing
             modifyIORef (tsProcesses server) $
-              M.insert pid LocalProcessInfo { lpLocalTime = t, lpMonitorRef = Nothing }
+              M.insert pid LogicalProcessInfo { lpLocalTime = t, lpMonitorRef = Nothing }
             return $
               do when (tsProcessMonitoringEnabled $ tsParams server) $
                    do logTimeServer server INFO $
@@ -142,9 +142,9 @@ processTimeServerMessage server (RegisterLocalProcessMessage pid) =
                         modifyIORef (tsProcesses server) $
                         M.update (\x -> Just x { lpMonitorRef = Just r }) pid
                  serverId <- DP.getSelfPid
-                 DP.send pid (RegisterLocalProcessAcknowledgmentMessage serverId)
+                 DP.send pid (RegisterLogicalProcessAcknowledgmentMessage serverId)
                  tryStartTimeServer server
-processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
+processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
   join $ liftIO $
   do m <- readIORef (tsProcesses server)
      case M.lookup pid m of
@@ -166,7 +166,7 @@ processTimeServerMessage server (UnregisterLocalProcessMessage pid) =
                             "Time Server: unmonitoring the process by identifier " ++ show pid
                           DP.unmonitor r
                  serverId <- DP.getSelfPid
-                 DP.send pid (UnregisterLocalProcessAcknowledgmentMessage serverId)
+                 DP.send pid (UnregisterLogicalProcessAcknowledgmentMessage serverId)
                  tryProvideTimeServerGlobalTime server
                  tryTerminateTimeServer server
 processTimeServerMessage server (TerminateTimeServerMessage pid) =
@@ -203,7 +203,7 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
          return $
          do logTimeServer server WARNING $
               "Time Server: unknown process identifier " ++ show pid
-            processTimeServerMessage server (RegisterLocalProcessMessage pid)
+            processTimeServerMessage server (RegisterLogicalProcessMessage pid)
             processTimeServerMessage server (LocalTimeMessage pid t')
        Just x  ->
          do writeIORef (lpLocalTime x) (Just t')
@@ -250,7 +250,7 @@ tryStartTimeServer server =
                                 "Time Server: starting"
                               tryComputeTimeServerGlobalTime server
   
--- | Try to compute the global time and provide the local processes with it.
+-- | Try to compute the global time and provide the logical processes with it.
 tryComputeTimeServerGlobalTime :: TimeServer -> DP.Process ()
 tryComputeTimeServerGlobalTime server =
   join $ liftIO $
@@ -275,7 +275,7 @@ resetComputingTimeServerGlobalTime server =
           writeIORef (tsProcessesInFind server) S.empty
           writeIORef (tsGlobalTimeTimestamp server) (Just utc)
 
--- | Try to provide the local processes wth the global time. 
+-- | Try to provide the logical processes wth the global time. 
 tryProvideTimeServerGlobalTime :: TimeServer -> DP.Process ()
 tryProvideTimeServerGlobalTime server =
   join $ liftIO $
@@ -303,7 +303,7 @@ computeTimeServerGlobalTime server =
      forM_ zs $ \(pid, x) ->
        DP.send pid ComputeLocalTimeMessage
 
--- | Provide the local processes with the global time.
+-- | Provide the logical processes with the global time.
 provideTimeServerGlobalTime :: TimeServer -> DP.Process ()
 provideTimeServerGlobalTime server =
   do t0 <- liftIO $ timeServerGlobalTime server
@@ -380,7 +380,7 @@ handleTimeServerException server e =
      C.throwM e
 
 -- | Start the time server by the specified initial quorum and parameters.
--- The quorum defines the number of local processes that must be registered in
+-- The quorum defines the number of logical processes that must be registered in
 -- the time server before the global time synchronization is started.
 timeServer :: Int -> TimeServerParams -> DP.Process ()
 timeServer n ps =

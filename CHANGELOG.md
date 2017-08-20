@@ -1,4 +1,9 @@
 
+Version 0.7
+-----
+
+* Fixed the use of the LP abbreviation.
+
 Version 0.6
 -----
 
