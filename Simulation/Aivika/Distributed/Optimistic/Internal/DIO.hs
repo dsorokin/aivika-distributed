@@ -405,13 +405,18 @@ runDIO m ps serverId =
                      loop
        in C.catch loop (handleException ps)
      DP.spawnLocal $
-       let loop =
+       let stop =
              do f <- liftIO $ readIORef terminated
-                unless (f || dioStrategy ps == WaitIndefinitelyForTimeServer) $
+                return (f || dioStrategy ps == WaitIndefinitelyForTimeServer)
+           loop =
+             do f <- stop
+                unless f $
                   do liftIO $
                        threadDelay (dioSyncTimeout ps)
-                     validateTimeServer ps inboxId timeServerTimestamp
-                     loop
+                     f <- stop
+                     unless f $
+                       do validateTimeServer ps inboxId timeServerTimestamp
+                          loop
        in C.catch loop (handleException ps)
      let simulation =
            unDIO m DIOContext { dioChannel = ch,
