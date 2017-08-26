@@ -1,4 +1,10 @@
 
+Version 0.7.1
+-----
+
+* Added the time server and logical process strategies to shutdown the cluster
+  in case of failure by the specified timeout intervals.
+
 Version 0.7
 -----
 
@@ -30,7 +36,7 @@ Version 0.3
 
 * Started using Samadi's algorithm to synchronize the global virtual time.
 
-* The local processes must call registerDIO to connect to the time server.
+* The logical processes must call registerDIO to connect to the time server.
 
 * Increased the default synchronization time-out and delay.
 
