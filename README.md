@@ -33,3 +33,5 @@ processes simultaneously.
 So, this estimation seems to be quite good. At the same time, the message passing between the logical processes can 
 dramatically decrease the speed of distributed simulation, especially if they cause rollbacks. Thus, much depends on 
 the distributed model itself.
+
+Finally, you can use the following test [model](https://github.com/dsorokin/aivika-distributed-test) as an example.

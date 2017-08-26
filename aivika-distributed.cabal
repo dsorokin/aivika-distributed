@@ -34,11 +34,15 @@ description:
     dramatically decrease the speed of distributed simulation, especially if they cause rollbacks. Thus, much depends on 
     the distributed model itself.
     .
+    Finally, you can use the following test model [4] as an example.
+    .
     \[1] <http://hackage.haskell.org/package/aivika-transformers>
     .
     \[2] <http://hackage.haskell.org/package/aivika>
     .
     \[3] <http://www.aivikasoft.com>
+    .
+    \[4] <https://github.com/dsorokin/aivika-distributed-test>
     .
 category:        Simulation
 license:         BSD3
