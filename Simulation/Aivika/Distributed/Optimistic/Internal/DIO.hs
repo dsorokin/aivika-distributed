@@ -14,6 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
+        DIOStrategy(..),
         invokeDIO,
         runDIO,
         defaultDIOParams,
@@ -37,6 +38,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Data.Typeable
 import Data.Binary
 import Data.IORef
+import Data.Time.Clock
 
 import GHC.Generics
 
@@ -87,11 +89,22 @@ data DIOParams =
               -- ^ The timeout in microseconds before reconnecting to the remote process
               dioKeepAliveInterval :: Int,
               -- ^ The interval in microseconds for sending keep-alive messages
-              dioTimeServerAcknowledgmentTimeout :: Int
+              dioTimeServerAcknowledgmentTimeout :: Int,
               -- ^ The timeout in microseconds for receiving an acknowledgment message from the time server
+              dioStrategy :: DIOStrategy
+              -- ^ The logical process strategy
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
+
+-- | The logical process strategy.
+data DIOStrategy = WaitIndefinitelyForTimeServer
+                   -- ^ Wait the time server forever
+                 | TerminateDueToTimeServerTimeout Int
+                   -- ^ Terminate due to the exceeded time server timeout in microseconds, but not less than 'dioSyncTimeout'
+                 deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary DIOStrategy
 
 -- | The distributed computation based on 'IO'.
 newtype DIO a = DIO { unDIO :: DIOContext -> DP.Process a
@@ -174,7 +187,8 @@ defaultDIOParams =
               dioProcessReconnectingEnabled = False,
               dioProcessReconnectingDelay = 5000000,
               dioKeepAliveInterval = 5000000,
-              dioTimeServerAcknowledgmentTimeout = 5000000
+              dioTimeServerAcknowledgmentTimeout = 5000000,
+              dioStrategy = TerminateDueToTimeServerTimeout 300000000
             }
 
 -- | Return the computation context.
@@ -291,6 +305,7 @@ runDIO m ps serverId =
      registeredInTimeServer <- liftIO $ newTVarIO False
      unregisteredFromTimeServer <- liftIO $ newTVarIO False
      timeServerTerminating <- liftIO $ newTVarIO False
+     timeServerTimestamp <- liftIO $ getCurrentTime >>= newIORef
      let loop =
            forever $
            do let f1 :: LogicalProcessMessage -> DP.Process InternalLogicalProcessMessage
@@ -306,7 +321,8 @@ runDIO m ps serverId =
                 Nothing -> return ()
                 Just (InternalLogicalProcessMessage m) ->
                   liftIO $
-                  writeChannel ch m
+                  do stampTimeServerMessage m timeServerTimestamp
+                     writeChannel ch m
                 Just (InternalProcessMonitorNotification m@(DP.ProcessMonitorNotification _ _ _)) ->
                   handleProcessMonitorNotification m ps ch
                 Just (InternalInboxProcessMessage m) ->
@@ -375,8 +391,7 @@ runDIO m ps serverId =
                   do ---
                      logProcess ps DEBUG $ "Received " ++ show m
                      ---
-                     liftIO $
-                       writeChannel ch (KeepAliveLogicalProcessMessage m)
+                     return ()
      inboxId <-
        DP.spawnLocal $
        C.catch loop (handleException ps)
@@ -387,6 +402,15 @@ runDIO m ps serverId =
                   do liftIO $
                        threadDelay (dioKeepAliveInterval ps)
                      DP.send inboxId TrySendKeepAliveMessage
+                     loop
+       in C.catch loop (handleException ps)
+     DP.spawnLocal $
+       let loop =
+             do f <- liftIO $ readIORef terminated
+                unless (f || dioStrategy ps == WaitIndefinitelyForTimeServer) $
+                  do liftIO $
+                       threadDelay (dioSyncTimeout ps)
+                     validateTimeServer ps inboxId timeServerTimestamp
                      loop
        in C.catch loop (handleException ps)
      let simulation =
@@ -466,6 +490,35 @@ monitorProcessDIO pid =
                  MonitorProcessMessage pid
        else liftDistributedUnsafe $
             logProcess ps WARNING "Ignored the process monitoring as it was disabled in the DIO computation parameters"
+
+-- | Stamp the time server message in a stream of messages destined for the logical process.
+stampTimeServerMessage :: LogicalProcessMessage -> IORef UTCTime -> IO ()
+stampTimeServerMessage ComputeLocalTimeMessage r = getCurrentTime >>= writeIORef r
+stampTimeServerMessage (GlobalTimeMessage _)   r = getCurrentTime >>= writeIORef r
+stampTimeServerMessage _                       r = return ()
+
+-- | Validate the time server by the specified inbox and recent timestamp.
+validateTimeServer :: DIOParams -> DP.ProcessId -> IORef UTCTime -> DP.Process ()
+validateTimeServer ps inboxId r =
+  do ---
+     logProcess ps NOTICE "Validating the time server"
+     ---
+     case dioStrategy ps of
+       WaitIndefinitelyForTimeServer ->
+         return ()
+       TerminateDueToTimeServerTimeout timeout ->
+         do utc0 <- liftIO $ readIORef r
+            utc  <- liftIO getCurrentTime
+            let dt = fromRational $ toRational (diffUTCTime utc utc0)
+            when (secondsToMicroseconds dt > timeout) $
+              do ---
+                 logProcess ps WARNING "Terminating due to the exceeded time server timeout"
+                 ---
+                 DP.send inboxId TerminateInboxProcessMessage 
+
+-- | Convert seconds to microseconds.
+secondsToMicroseconds :: Double -> Int
+secondsToMicroseconds x = fromInteger $ toInteger $ round (1000000 * x)
 
 -- | Send the message.
 sendMessageDIO :: DP.ProcessId -> Message -> DIO ()

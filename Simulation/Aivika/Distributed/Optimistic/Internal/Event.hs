@@ -422,14 +422,6 @@ processChannelMessage x@(ReconnectProcessMessage pid) =
      ---
      invokeEvent p $
        reconnectProcess pid
-processChannelMessage x@(KeepAliveLogicalProcessMessage m) =
-  TimeWarp $ \p ->
-  do let q = runEventQueue $ pointRun p
-     ---
-     --- invokeEvent p $
-     ---   logMessage x
-     ---
-     return ()
 
 -- | Return the local minimum time.
 getLocalTime :: Event DIO Double

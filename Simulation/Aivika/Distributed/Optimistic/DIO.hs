@@ -14,6 +14,7 @@
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
         DIOParams(..),
+        DIOStrategy(..),
         runDIO,
         defaultDIOParams,
         dioParams,
