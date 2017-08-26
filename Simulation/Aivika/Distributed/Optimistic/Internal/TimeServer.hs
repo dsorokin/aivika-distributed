@@ -382,6 +382,12 @@ minTimestampLogicalProcess server =
                       then loop zs' acc
                       else loop zs' x
 
+-- | Filter the logical processes.
+filterLogicalProcesses :: TimeServer -> [DP.ProcessId] -> IO [DP.ProcessId]
+filterLogicalProcesses server pids =
+  do xs <- readIORef (tsProcesses server)
+     return $ filter (\pid -> M.member pid xs) pids
+
 -- | Start terminating the time server.
 startTerminatingTimeServer :: TimeServer -> DP.Process ()
 startTerminatingTimeServer server =
@@ -487,7 +493,7 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
                    case y of
                      Nothing -> return $ reverse acc
                      Just m@(DP.ProcessMonitorNotification _ pid _) -> loop (pid : acc)
-          pids <- loop [pid0]
+          pids <- loop [pid0] >>= (liftIO . filterLogicalProcesses server)
           ---
           logTimeServer server NOTICE "Begin reconnecting..."
           ---
