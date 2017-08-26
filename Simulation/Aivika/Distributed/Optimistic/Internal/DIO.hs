@@ -324,7 +324,7 @@ runDIO m ps serverId =
                   do stampTimeServerMessage m timeServerTimestamp
                      writeChannel ch m
                 Just (InternalProcessMonitorNotification m@(DP.ProcessMonitorNotification _ _ _)) ->
-                  handleProcessMonitorNotification m ps ch
+                  handleProcessMonitorNotification m ps ch serverId
                 Just (InternalInboxProcessMessage m) ->
                   case m of
                     SendQueueMessage pid m ->
@@ -424,8 +424,8 @@ runDIO m ps serverId =
      return (inboxId, simulation)
 
 -- | Handle the process monitor notification.
-handleProcessMonitorNotification :: DP.ProcessMonitorNotification -> DIOParams -> Channel LogicalProcessMessage -> DP.Process ()
-handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason) ps ch =
+handleProcessMonitorNotification :: DP.ProcessMonitorNotification -> DIOParams -> Channel LogicalProcessMessage -> DP.ProcessId -> DP.Process ()
+handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason) ps ch serverId =
   do let recv m@(DP.ProcessMonitorNotification _ _ _) = 
            do ---
               logProcess ps WARNING $ "Received a process monitor notification " ++ show m
@@ -434,6 +434,12 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
                 writeChannel ch (ProcessMonitorNotificationMessage m)
               return m
      recv m
+     when (pid0 == serverId) $
+       case reason of
+         DP.DiedNormal      -> processTimeServerTerminated ps serverId 
+         DP.DiedException _ -> processTimeServerTerminated ps serverId
+         DP.DiedNodeDown    -> processTimeServerTerminated ps serverId
+         _                  -> return ()
      when (dioProcessReconnectingEnabled ps && (reason == DP.DiedDisconnect)) $
        do liftIO $
             threadDelay (dioProcessReconnectingDelay ps)
@@ -515,6 +521,14 @@ validateTimeServer ps inboxId r =
                  logProcess ps WARNING "Terminating due to the exceeded time server timeout"
                  ---
                  DP.send inboxId TerminateInboxProcessMessage 
+
+-- | Process the situation when the time server has suddenly been terminated.
+processTimeServerTerminated :: DIOParams -> DP.ProcessId -> DP.Process ()
+processTimeServerTerminated ps inboxId =
+  do ---
+     logProcess ps NOTICE "Terminating due to sudden termination of the time server"
+     ---
+     DP.send inboxId TerminateInboxProcessMessage 
 
 -- | Convert seconds to microseconds.
 secondsToMicroseconds :: Double -> Int
