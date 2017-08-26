@@ -63,12 +63,18 @@ data TimeServerParams =
 instance Binary TimeServerParams
 
 -- | The time server strategy.
-data TimeServerStrategy = WaitForLogicalProcess
+data TimeServerStrategy = WaitIndefinitelyForLogicalProcess
                           -- ^ wait for the logical process forever
                         | TerminateDueToLogicalProcessTimeout Int
-                          -- ^ terminate the server due to the exceeded logical process timeout in microseconds, but not less than 'tsTimeSyncTimeout'
+                          -- ^ terminate the server due to the exceeded logical process timeout in microseconds,
+                          -- but not less than 'tsTimeSyncTimeout', which is a much more preferable option than
+                          -- significantly more risky 'UnregisterLogicalProcessDueToTimeout'
                         | UnregisterLogicalProcessDueToTimeout Int
-                          -- ^ unregister the logical process to the exceeded timeout in microseconds, but not less than 'tsTimeSyncTimeout'
+                          -- ^ unregister the logical process due to the exceeded timeout in microseconds,
+                          -- but not less than 'tsTimeSyncTimeout', which is a very risky option as there can be
+                          -- un-acknowledged messages by the just unregistered logical process that might shutdown,
+                          -- which would keep the global virtual time on the same value even if the existent
+                          -- logical processes had another local time
                         deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerStrategy
@@ -542,7 +548,7 @@ validateLogicalProcesses server utc =
      liftIO $
        writeIORef (tsLogicalProcessValidationTimestamp server) utc
      case tsStrategy (tsParams server) of
-       WaitForLogicalProcess ->
+       WaitIndefinitelyForLogicalProcess ->
          return ()
        TerminateDueToLogicalProcessTimeout timeout ->
          do x <- liftIO $ minTimestampLogicalProcess server
