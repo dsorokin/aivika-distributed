@@ -99,7 +99,7 @@ instance Binary DIOParams
 
 -- | The logical process strategy.
 data DIOStrategy = WaitIndefinitelyForTimeServer
-                   -- ^ Wait the time server forever
+                   -- ^ Wait for the time server forever
                  | TerminateDueToTimeServerTimeout Int
                    -- ^ Terminate due to the exceeded time server timeout in microseconds, but not less than 'dioSyncTimeout'
                  deriving (Eq, Ord, Show, Typeable, Generic)
