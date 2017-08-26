@@ -172,7 +172,7 @@ processTimeServerMessage server (RegisterLogicalProcessMessage pid) =
                         modifyIORef (tsProcesses server) $
                         M.update (\x -> Just x { lpMonitorRef = Just r }) pid
                  serverId <- DP.getSelfPid
-                 DP.send pid (RegisterLogicalProcessAcknowledgmentMessage serverId)
+                 DP.send pid (RegisterLogicalProcessAcknowledgementMessage serverId)
                  tryStartTimeServer server
 processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
   join $ liftIO $
@@ -196,7 +196,7 @@ processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
                             "Time Server: unmonitoring the process by identifier " ++ show pid
                           DP.unmonitor r
                  serverId <- DP.getSelfPid
-                 DP.send pid (UnregisterLogicalProcessAcknowledgmentMessage serverId)
+                 DP.send pid (UnregisterLogicalProcessAcknowledgementMessage serverId)
                  tryProvideTimeServerGlobalTime server
                  tryTerminateTimeServer server
 processTimeServerMessage server (TerminateTimeServerMessage pid) =
@@ -221,7 +221,7 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
                             "Time Server: unmonitoring the process by identifier " ++ show pid
                           DP.unmonitor r
                  serverId <- DP.getSelfPid
-                 DP.send pid (TerminateTimeServerAcknowledgmentMessage serverId)
+                 DP.send pid (TerminateTimeServerAcknowledgementMessage serverId)
                  startTerminatingTimeServer server
 processTimeServerMessage server (RequestGlobalTimeMessage pid) =
   tryComputeTimeServerGlobalTime server

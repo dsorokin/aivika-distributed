@@ -28,8 +28,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
         timeServerId,
         sendMessageDIO,
         sendMessagesDIO,
-        sendAcknowledgmentMessageDIO,
-        sendAcknowledgmentMessagesDIO,
+        sendAcknowledgementMessageDIO,
+        sendAcknowledgementMessagesDIO,
         sendLocalTimeDIO,
         sendRequestGlobalTimeDIO,
         logDIO,
@@ -89,8 +89,8 @@ data DIOParams =
               -- ^ The timeout in microseconds before reconnecting to the remote process
               dioKeepAliveInterval :: Int,
               -- ^ The interval in microseconds for sending keep-alive messages
-              dioTimeServerAcknowledgmentTimeout :: Int,
-              -- ^ The timeout in microseconds for receiving an acknowledgment message from the time server
+              dioTimeServerAcknowledgementTimeout :: Int,
+              -- ^ The timeout in microseconds for receiving an acknowledgement message from the time server
               dioStrategy :: DIOStrategy
               -- ^ The logical process strategy
             } deriving (Eq, Ord, Show, Typeable, Generic)
@@ -187,7 +187,7 @@ defaultDIOParams =
               dioProcessReconnectingEnabled = False,
               dioProcessReconnectingDelay = 5000000,
               dioKeepAliveInterval = 5000000,
-              dioTimeServerAcknowledgmentTimeout = 5000000,
+              dioTimeServerAcknowledgementTimeout = 5000000,
               dioStrategy = TerminateDueToTimeServerTimeout 300000000
             }
 
@@ -225,7 +225,7 @@ terminateDIO =
        then DP.send inbox (SendTerminateTimeServerMessage receiver sender)
        else DP.send receiver (TerminateTimeServerMessage sender)
      liftIO $
-       timeout (dioTimeServerAcknowledgmentTimeout ps) $
+       timeout (dioTimeServerAcknowledgementTimeout ps) $
        atomically $
        do f <- readTVar (dioTimeServerTerminating ctx)
           unless f retry
@@ -246,7 +246,7 @@ registerDIO =
        then DP.send inbox (SendRegisterLogicalProcessMessage receiver sender)
        else DP.send receiver (RegisterLogicalProcessMessage sender)
      liftIO $
-       timeout (dioTimeServerAcknowledgmentTimeout ps) $
+       timeout (dioTimeServerAcknowledgementTimeout ps) $
        atomically $
        do f <- readTVar (dioRegisteredInTimeServer ctx)
           unless f retry
@@ -267,7 +267,7 @@ unregisterDIO =
        then DP.send inbox (SendUnregisterLogicalProcessMessage receiver sender)
        else DP.send receiver (UnregisterLogicalProcessMessage sender)
      liftIO $
-       timeout (dioTimeServerAcknowledgmentTimeout ps) $
+       timeout (dioTimeServerAcknowledgementTimeout ps) $
        atomically $
        do f <- readTVar (dioUnregisteredFromTimeServer ctx)
           unless f retry
@@ -332,11 +332,11 @@ runDIO m ps serverId =
                     SendQueueMessageBulk pid ms ->
                       forM_ ms $ \m ->
                       DP.send pid (QueueMessage m)
-                    SendAcknowledgmentQueueMessage pid m ->
-                      DP.send pid (AcknowledgmentQueueMessage m)
-                    SendAcknowledgmentQueueMessageBulk pid ms ->
+                    SendAcknowledgementQueueMessage pid m ->
+                      DP.send pid (AcknowledgementQueueMessage m)
+                    SendAcknowledgementQueueMessageBulk pid ms ->
                       forM_ ms $ \m ->
-                      DP.send pid (AcknowledgmentQueueMessage m)
+                      DP.send pid (AcknowledgementQueueMessage m)
                     SendLocalTimeMessage receiver sender t ->
                       DP.send receiver (LocalTimeMessage sender t)
                     SendRequestGlobalTimeMessage receiver sender ->
@@ -359,21 +359,21 @@ runDIO m ps serverId =
                       handleReMonitorProcessMessage pids ps ch
                     TrySendKeepAliveMessage ->
                       trySendKeepAlive keepAliveManager
-                    RegisterLogicalProcessAcknowledgmentMessage pid ->
+                    RegisterLogicalProcessAcknowledgementMessage pid ->
                       do ---
                          logProcess ps INFO "Registered the logical process in the time server"
                          ---
                          liftIO $
                            atomically $
                            writeTVar registeredInTimeServer True
-                    UnregisterLogicalProcessAcknowledgmentMessage pid ->
+                    UnregisterLogicalProcessAcknowledgementMessage pid ->
                       do ---
                          logProcess ps INFO "Unregistered the logical process from the time server"
                          ---
                          liftIO $
                            atomically $
                            writeTVar unregisteredFromTimeServer True
-                    TerminateTimeServerAcknowledgmentMessage pid ->
+                    TerminateTimeServerAcknowledgementMessage pid ->
                       do ---
                          logProcess ps INFO "Started terminating the time server"
                          ---
@@ -571,30 +571,30 @@ sendMessagesDIO pid ms =
                  liftDistributedUnsafe $
                  DP.send pid (QueueMessage m)
 
--- | Send the acknowledgment message.
-sendAcknowledgmentMessageDIO :: DP.ProcessId -> AcknowledgmentMessage -> DIO ()
-{-# INLINABLE sendAcknowledgmentMessageDIO #-}
-sendAcknowledgmentMessageDIO pid m =
+-- | Send the acknowledgement message.
+sendAcknowledgementMessageDIO :: DP.ProcessId -> AcknowledgementMessage -> DIO ()
+{-# INLINABLE sendAcknowledgementMessageDIO #-}
+sendAcknowledgementMessageDIO pid m =
   do ps <- dioParams
      if dioProcessMonitoringEnabled ps
        then do inbox <- messageInboxId
                liftDistributedUnsafe $
-                 DP.send inbox (SendAcknowledgmentQueueMessage pid m)
+                 DP.send inbox (SendAcknowledgementQueueMessage pid m)
        else liftDistributedUnsafe $
-            DP.send pid (AcknowledgmentQueueMessage m)
+            DP.send pid (AcknowledgementQueueMessage m)
 
--- | Send the bulk of acknowledgment messages.
-sendAcknowledgmentMessagesDIO :: DP.ProcessId -> [AcknowledgmentMessage] -> DIO ()
-{-# INLINABLE sendAcknowledgmentMessagesDIO #-}
-sendAcknowledgmentMessagesDIO pid ms =
+-- | Send the bulk of acknowledgement messages.
+sendAcknowledgementMessagesDIO :: DP.ProcessId -> [AcknowledgementMessage] -> DIO ()
+{-# INLINABLE sendAcknowledgementMessagesDIO #-}
+sendAcknowledgementMessagesDIO pid ms =
   do ps <- dioParams
      if dioProcessMonitoringEnabled ps
        then do inbox <- messageInboxId
                liftDistributedUnsafe $
-                 DP.send inbox (SendAcknowledgmentQueueMessageBulk pid ms)
+                 DP.send inbox (SendAcknowledgementQueueMessageBulk pid ms)
        else do forM_ ms $ \m ->
                  liftDistributedUnsafe $
-                 DP.send pid (AcknowledgmentQueueMessage m)
+                 DP.send pid (AcknowledgementQueueMessage m)
 
 -- | Send the local time to the time server.
 sendLocalTimeDIO :: DP.ProcessId -> DP.ProcessId -> Double -> DIO ()

@@ -16,11 +16,11 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
         transientMessageQueueTime,
         transientMessages,
         enqueueTransientMessage,
-        processAcknowledgmentMessage,
-        acknowledgmentMessageTime,
-        resetAcknowledgmentMessageTime,
-        deliverAcknowledgmentMessage,
-        deliverAcknowledgmentMessages) where
+        processAcknowledgementMessage,
+        acknowledgementMessageTime,
+        resetAcknowledgementMessageTime,
+        deliverAcknowledgementMessage,
+        deliverAcknowledgementMessages) where
 
 import qualified Data.Map as M
 import Data.List
@@ -39,7 +39,7 @@ data TransientMessageQueue =
   TransientMessageQueue { queueTransientMessages :: IORef (M.Map TransientMessageQueueItem Message),
                           -- ^ The transient messages.
                           queueMarkedMessageTime :: IORef Double
-                          -- ^ The marked acknowledgment message time.
+                          -- ^ The marked acknowledgement message time.
                         }
 
 -- | Represents an acknowledgement message representative.
@@ -55,7 +55,7 @@ data TransientMessageQueueItem =
                               itemReceiverId :: DP.ProcessId,
                               -- ^ The receiver of the source message.
                               itemAntiToggle :: Bool
-                              -- ^ Whether it was the anti-message acknowledgment.
+                              -- ^ Whether it was the anti-message acknowledgement.
                             } deriving (Eq, Show)
 
 instance Ord TransientMessageQueueItem where
@@ -85,15 +85,15 @@ transientMessageQueueItem m =
                               itemReceiverId  = messageReceiverId m,
                               itemAntiToggle  = messageAntiToggle m }
 
--- | Return a queue item by the specified acknowledgment message.
-acknowledgmentMessageQueueItem :: AcknowledgmentMessage -> TransientMessageQueueItem
-acknowledgmentMessageQueueItem m =
-  TransientMessageQueueItem { itemSequenceNo  = acknowledgmentSequenceNo m,
-                              itemSendTime    = acknowledgmentSendTime m,
-                              itemReceiveTime = acknowledgmentReceiveTime m,
-                              itemSenderId    = acknowledgmentSenderId m,
-                              itemReceiverId  = acknowledgmentReceiverId m,
-                              itemAntiToggle  = acknowledgmentAntiToggle m }
+-- | Return a queue item by the specified acknowledgement message.
+acknowledgementMessageQueueItem :: AcknowledgementMessage -> TransientMessageQueueItem
+acknowledgementMessageQueueItem m =
+  TransientMessageQueueItem { itemSequenceNo  = acknowledgementSequenceNo m,
+                              itemSendTime    = acknowledgementSendTime m,
+                              itemReceiveTime = acknowledgementReceiveTime m,
+                              itemSenderId    = acknowledgementSenderId m,
+                              itemReceiverId  = acknowledgementReceiverId m,
+                              itemAntiToggle  = acknowledgementAntiToggle m }
 
 -- | Create a new transient message queue.
 newTransientMessageQueue :: DIO TransientMessageQueue
@@ -129,43 +129,43 @@ enqueueTransientMessage q m =
   modifyIORef (queueTransientMessages q) $
   M.insert (transientMessageQueueItem m) m
 
--- | Enqueue the acknowledgment message.
-enqueueAcknowledgmentMessage :: TransientMessageQueue -> AcknowledgmentMessage -> IO ()
-enqueueAcknowledgmentMessage q m =
+-- | Enqueue the acknowledgement message.
+enqueueAcknowledgementMessage :: TransientMessageQueue -> AcknowledgementMessage -> IO ()
+enqueueAcknowledgementMessage q m =
   modifyIORef' (queueMarkedMessageTime q) $
-  min (acknowledgmentReceiveTime m)
+  min (acknowledgementReceiveTime m)
 
--- | Process the acknowledgment message.
-processAcknowledgmentMessage :: TransientMessageQueue -> AcknowledgmentMessage -> IO () 
-processAcknowledgmentMessage q m =
+-- | Process the acknowledgement message.
+processAcknowledgementMessage :: TransientMessageQueue -> AcknowledgementMessage -> IO () 
+processAcknowledgementMessage q m =
   do ms <- readIORef (queueTransientMessages q)
-     let k = acknowledgmentMessageQueueItem m
+     let k = acknowledgementMessageQueueItem m
      when (M.member k ms) $
        do modifyIORef (queueTransientMessages q) $
             M.delete k
-          when (acknowledgmentMarked m) $
-            enqueueAcknowledgmentMessage q m
+          when (acknowledgementMarked m) $
+            enqueueAcknowledgementMessage q m
 
--- | Get the minimal marked acknowledgment message time.
-acknowledgmentMessageTime :: TransientMessageQueue -> IO Double
-acknowledgmentMessageTime q =
+-- | Get the minimal marked acknowledgement message time.
+acknowledgementMessageTime :: TransientMessageQueue -> IO Double
+acknowledgementMessageTime q =
   readIORef (queueMarkedMessageTime q)
 
--- | Reset the marked acknowledgment message time.
-resetAcknowledgmentMessageTime :: TransientMessageQueue -> IO ()
-resetAcknowledgmentMessageTime q =
+-- | Reset the marked acknowledgement message time.
+resetAcknowledgementMessageTime :: TransientMessageQueue -> IO ()
+resetAcknowledgementMessageTime q =
   writeIORef (queueMarkedMessageTime q) (1 / 0)
 
--- | Deliver the acknowledgment message on low level.
-deliverAcknowledgmentMessage :: AcknowledgmentMessage -> DIO ()
-deliverAcknowledgmentMessage x =
-  sendAcknowledgmentMessageDIO (acknowledgmentSenderId x) x
+-- | Deliver the acknowledgement message on low level.
+deliverAcknowledgementMessage :: AcknowledgementMessage -> DIO ()
+deliverAcknowledgementMessage x =
+  sendAcknowledgementMessageDIO (acknowledgementSenderId x) x
 
--- | Deliver the acknowledgment messages on low level.
-deliverAcknowledgmentMessages :: [AcknowledgmentMessage] -> DIO ()
-deliverAcknowledgmentMessages xs =
-  let ys = groupBy (\a b -> acknowledgmentSenderId a == acknowledgmentSenderId b) xs
+-- | Deliver the acknowledgement messages on low level.
+deliverAcknowledgementMessages :: [AcknowledgementMessage] -> DIO ()
+deliverAcknowledgementMessages xs =
+  let ys = groupBy (\a b -> acknowledgementSenderId a == acknowledgementSenderId b) xs
       dlv []         = return ()
       dlv zs@(z : _) =
-        sendAcknowledgmentMessagesDIO (acknowledgmentSenderId z) zs
+        sendAcknowledgementMessagesDIO (acknowledgementSenderId z) zs
   in forM_ ys dlv

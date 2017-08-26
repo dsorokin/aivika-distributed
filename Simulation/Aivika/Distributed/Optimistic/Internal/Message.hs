@@ -15,8 +15,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
        (Message(..),
         antiMessage,
         antiMessages,
-        AcknowledgmentMessage(..),
-        acknowledgmentMessage,
+        AcknowledgementMessage(..),
+        acknowledgementMessage,
         LogicalProcessMessage(..),
         TimeServerMessage(..),
         InboxProcessMessage(..),
@@ -75,46 +75,46 @@ instance Eq Message where
     (messageAntiToggle x == messageAntiToggle y)
 
 -- | Represents an acknowledgement message.
-data AcknowledgmentMessage =
-  AcknowledgmentMessage { acknowledgmentSequenceNo :: Int,
-                          -- ^ The sequence number.
-                          acknowledgmentSendTime :: Double,
-                          -- ^ The send time.
-                          acknowledgmentReceiveTime :: Double,
-                          -- ^ The receive time.
-                          acknowledgmentSenderId :: DP.ProcessId,
-                          -- ^ The sender of the source message.
-                          acknowledgmentReceiverId :: DP.ProcessId,
-                          -- ^ The receiver of the source message.
-                          acknowledgmentAntiToggle :: Bool,
-                          -- ^ Whether this is an anti-message acknowledgment.
-                          acknowledgmentMarked :: Bool
-                          -- ^ Whether the acknowledgment is marked.
-                        } deriving (Eq, Ord, Show, Typeable, Generic)
+data AcknowledgementMessage =
+  AcknowledgementMessage { acknowledgementSequenceNo :: Int,
+                           -- ^ The sequence number.
+                           acknowledgementSendTime :: Double,
+                           -- ^ The send time.
+                           acknowledgementReceiveTime :: Double,
+                           -- ^ The receive time.
+                           acknowledgementSenderId :: DP.ProcessId,
+                           -- ^ The sender of the source message.
+                           acknowledgementReceiverId :: DP.ProcessId,
+                           -- ^ The receiver of the source message.
+                           acknowledgementAntiToggle :: Bool,
+                           -- ^ Whether this is an anti-message acknowledgement.
+                           acknowledgementMarked :: Bool
+                           -- ^ Whether the acknowledgement is marked.
+                         } deriving (Eq, Ord, Show, Typeable, Generic)
 
-instance Binary AcknowledgmentMessage
+instance Binary AcknowledgementMessage
 
--- | Create an acknowledgment message specifying whether it will be marked.
-acknowledgmentMessage :: Bool -> Message -> AcknowledgmentMessage
-acknowledgmentMessage marked x =
-  AcknowledgmentMessage { acknowledgmentSequenceNo = messageSequenceNo x,
-                          acknowledgmentSendTime = messageSendTime x,
-                          acknowledgmentReceiveTime = messageReceiveTime x,
-                          acknowledgmentSenderId = messageSenderId x,
-                          acknowledgmentReceiverId = messageReceiverId x,
-                          acknowledgmentAntiToggle = messageAntiToggle x,
-                          acknowledgmentMarked = marked
-                        }
+-- | Create an acknowledgement message specifying whether it will be marked.
+acknowledgementMessage :: Bool -> Message -> AcknowledgementMessage
+acknowledgementMessage marked x =
+  AcknowledgementMessage { acknowledgementSequenceNo = messageSequenceNo x,
+                           acknowledgementSendTime = messageSendTime x,
+                           acknowledgementReceiveTime = messageReceiveTime x,
+                           acknowledgementSenderId = messageSenderId x,
+                           acknowledgementReceiverId = messageReceiverId x,
+                           acknowledgementAntiToggle = messageAntiToggle x,
+                           acknowledgementMarked = marked
+                         }
 
 -- | The message sent to the logical process.
 data LogicalProcessMessage = QueueMessage Message
                              -- ^ the message has come from the remote process
                            | QueueMessageBulk [Message]
                              -- ^ a bulk of messages that have come from the remote process
-                           | AcknowledgmentQueueMessage AcknowledgmentMessage
-                             -- ^ the acknowledgment message has come from the remote process
-                           | AcknowledgmentQueueMessageBulk [AcknowledgmentMessage]
-                             -- ^ a bulk of acknowledgment messages that have come from the remote process
+                           | AcknowledgementQueueMessage AcknowledgementMessage
+                             -- ^ the acknowledgement message has come from the remote process
+                           | AcknowledgementQueueMessageBulk [AcknowledgementMessage]
+                             -- ^ a bulk of acknowledgement messages that have come from the remote process
                            | ComputeLocalTimeMessage
                              -- ^ the time server requests for a local minimum time
                            | GlobalTimeMessage Double
@@ -157,10 +157,10 @@ data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
                            -- ^ send a queue message via the inbox process
                          | SendQueueMessageBulk DP.ProcessId [Message]
                            -- ^ send a bulk of queue messages via the inbox process
-                         | SendAcknowledgmentQueueMessage DP.ProcessId AcknowledgmentMessage
-                           -- ^ send an acknowledgment message via the inbox process
-                         | SendAcknowledgmentQueueMessageBulk DP.ProcessId [AcknowledgmentMessage]
-                           -- ^ send a bulk of acknowledgment messages via the inbox process
+                         | SendAcknowledgementQueueMessage DP.ProcessId AcknowledgementMessage
+                           -- ^ send an acknowledgement message via the inbox process
+                         | SendAcknowledgementQueueMessageBulk DP.ProcessId [AcknowledgementMessage]
+                           -- ^ send a bulk of acknowledgement messages via the inbox process
                          | SendLocalTimeMessage DP.ProcessId DP.ProcessId Double
                            -- ^ send the local time message to the time server
                          | SendRequestGlobalTimeMessage DP.ProcessId DP.ProcessId
@@ -171,11 +171,11 @@ data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
                            -- ^ unregister the logical process from the time server
                          | SendTerminateTimeServerMessage DP.ProcessId DP.ProcessId
                            -- ^ the logical process asked to terminate the time server
-                         | RegisterLogicalProcessAcknowledgmentMessage DP.ProcessId
+                         | RegisterLogicalProcessAcknowledgementMessage DP.ProcessId
                            -- ^ after registering the logical process in the time server
-                         | UnregisterLogicalProcessAcknowledgmentMessage DP.ProcessId
+                         | UnregisterLogicalProcessAcknowledgementMessage DP.ProcessId
                            -- ^ after unregistering the logical process from the time server
-                         | TerminateTimeServerAcknowledgmentMessage DP.ProcessId
+                         | TerminateTimeServerAcknowledgementMessage DP.ProcessId
                            -- ^ after started terminating the time server
                          | TerminateInboxProcessMessage
                            -- ^ terminate the inbox process

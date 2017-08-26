@@ -331,7 +331,7 @@ processChannelMessage x@(QueueMessage m) =
      ---   logMessage x
      ---
      infind <- liftIOUnsafe $ readIORef (queueInFind q)
-     deliverAcknowledgmentMessage (acknowledgmentMessage infind m)
+     deliverAcknowledgementMessage (acknowledgementMessage infind m)
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      p' <- invokeEvent p currentEventPoint
      if messageReceiveTime m < t0
@@ -349,7 +349,7 @@ processChannelMessage x@(QueueMessageBulk ms) =
      ---   logMessage x
      ---
      infind <- liftIOUnsafe $ readIORef (queueInFind q)
-     deliverAcknowledgmentMessages $ map (acknowledgmentMessage infind) ms
+     deliverAcknowledgementMessages $ map (acknowledgementMessage infind) ms
      t0 <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      forM_ ms $ \m ->
        do p' <- invokeEvent p currentEventPoint
@@ -360,7 +360,7 @@ processChannelMessage x@(QueueMessageBulk ms) =
                       else error "Received the outdated message: processChannelMessage"
             else invokeTimeWarp p' $
                  enqueueMessage (queueInputMessages q) m
-processChannelMessage x@(AcknowledgmentQueueMessage m) =
+processChannelMessage x@(AcknowledgementQueueMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
@@ -368,8 +368,8 @@ processChannelMessage x@(AcknowledgmentQueueMessage m) =
      ---   logMessage x
      ---
      liftIOUnsafe $
-       processAcknowledgmentMessage (queueTransientMessages q) m
-processChannelMessage x@(AcknowledgmentQueueMessageBulk ms) =
+       processAcknowledgementMessage (queueTransientMessages q) m
+processChannelMessage x@(AcknowledgementQueueMessageBulk ms) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
      ---
@@ -378,7 +378,7 @@ processChannelMessage x@(AcknowledgmentQueueMessageBulk ms) =
      ---
      liftIOUnsafe $
        forM_ ms $
-       processAcknowledgmentMessage (queueTransientMessages q)
+       processAcknowledgementMessage (queueTransientMessages q)
 processChannelMessage x@ComputeLocalTimeMessage =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -401,7 +401,7 @@ processChannelMessage x@(GlobalTimeMessage globalTime) =
      ---
      liftIOUnsafe $
        do writeIORef (queueInFind q) False
-          resetAcknowledgmentMessageTime (queueTransientMessages q)
+          resetAcknowledgementMessageTime (queueTransientMessages q)
      invokeEvent p $
        updateGlobalTime globalTime
 processChannelMessage x@(ProcessMonitorNotificationMessage y@(DP.ProcessMonitorNotification _ pid reason)) =
@@ -430,7 +430,7 @@ getLocalTime =
   do let q = runEventQueue $ pointRun p
      t1 <- liftIOUnsafe $ readIORef (queueTime q)
      t2 <- liftIOUnsafe $ transientMessageQueueTime (queueTransientMessages q)
-     t3 <- liftIOUnsafe $ acknowledgmentMessageTime (queueTransientMessages q)
+     t3 <- liftIOUnsafe $ acknowledgementMessageTime (queueTransientMessages q)
      let t' = t1 `min` t2 `min` t3
      ---
      --- n <- liftIOUnsafe $ transientMessageQueueSize (queueTransientMessages q)
@@ -738,10 +738,10 @@ reconnectProcess pid =
      infind <- liftIOUnsafe $ readIORef (queueInFind q)
      let ys = queueInputMessages q
      ys' <- liftIOUnsafe $
-            fmap (map $ acknowledgmentMessage infind) $
+            fmap (map $ acknowledgementMessage infind) $
             filterInputMessages (\x -> messageSenderId x == pid) ys
      unless (null ys') $
-       sendAcknowledgmentMessagesDIO pid ys'
+       sendAcknowledgementMessagesDIO pid ys'
      xs <- liftIOUnsafe $ transientMessages (queueTransientMessages q)
      let xs' = filter (\x -> messageReceiverId x == pid) xs
      unless (null xs') $
