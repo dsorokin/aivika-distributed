@@ -385,7 +385,8 @@ runDIO m ps serverId =
                          logProcess ps INFO "Terminating the inbox and keep-alive processes..."
                          ---
                          liftIO $
-                           atomicWriteIORef terminated True
+                           do atomicWriteIORef terminated True
+                              writeChannel ch AbortSimulationMessage
                          DP.terminate
                 Just (InternalKeepAliveMessage m) ->
                   do ---

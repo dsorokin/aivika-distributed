@@ -123,6 +123,8 @@ data LogicalProcessMessage = QueueMessage Message
                              -- ^ the process monitor notification
                            | ReconnectProcessMessage DP.ProcessId
                              -- ^ finish reconnecting to the specified process
+                           | AbortSimulationMessage
+                             -- ^ abort the simulation
                            deriving (Show, Typeable, Generic)
 
 instance Binary LogicalProcessMessage

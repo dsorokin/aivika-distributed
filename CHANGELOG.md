@@ -1,4 +1,9 @@
 
+Version 0.7.2
+-----
+
+* Improved the stopping of the logical processes in case of shutting the cluster down.
+
 Version 0.7.1
 -----
 

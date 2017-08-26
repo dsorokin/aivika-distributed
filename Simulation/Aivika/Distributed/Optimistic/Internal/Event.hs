@@ -422,6 +422,11 @@ processChannelMessage x@(ReconnectProcessMessage pid) =
      ---
      invokeEvent p $
        reconnectProcess pid
+processChannelMessage AbortSimulationMessage =
+  TimeWarp $ \p ->
+  invokeEvent p $
+  throwEvent $
+  SimulationAbort "Aborted by the outer process."
 
 -- | Return the local minimum time.
 getLocalTime :: Event DIO Double
