@@ -13,6 +13,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServerParams(..),
+        TimeServerStrategy(..),
         defaultTimeServerParams,
         timeServer,
         curryTimeServer) where
@@ -48,16 +49,29 @@ data TimeServerParams =
                      tsTimeSyncDelay :: Int,
                      -- ^ the delay in microseconds between the time synchronization sessions
                      tsProcessMonitoringEnabled :: Bool,
-                     -- ^ Whether the process monitoring is enabled
+                     -- ^ whether the process monitoring is enabled
                      tsProcessMonitoringDelay :: Int,
-                     -- ^ The delay in microseconds which must be applied for monitoring every remote process.
+                     -- ^ The delay in microseconds which must be applied for monitoring every remote process
                      tsProcessReconnectingEnabled :: Bool,
-                     -- ^ Whether the automatic reconnecting to processes is enabled when enabled monitoring
-                     tsProcessReconnectingDelay :: Int
+                     -- ^ whether the automatic reconnecting to processes is enabled when enabled monitoring
+                     tsProcessReconnectingDelay :: Int,
                      -- ^ the delay in microseconds before reconnecting
+                     tsStrategy :: TimeServerStrategy
+                     -- ^ the time server strategy
                    } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerParams
+
+-- | The time server strategy.
+data TimeServerStrategy = WaitForLogicalProcess
+                          -- ^ wait for the logical process forever
+                        | TerminateDueToLogicalProcessTimeout Int
+                          -- ^ terminate the server due to the exceeded logical process timeout in microseconds, but not less than 'tsTimeSyncTimeout'
+                        | UnregisterLogicalProcessDueToTimeout Int
+                          -- ^ unregister the logical process to the exceeded timeout in microseconds, but not less than 'tsTimeSyncTimeout'
+                        deriving (Eq, Ord, Show, Typeable, Generic)
+
+instance Binary TimeServerStrategy
 
 -- | The time server.
 data TimeServer =
@@ -75,14 +89,20 @@ data TimeServer =
                -- ^ the processed used in the current finding of the global time
                tsGlobalTime :: IORef (Maybe Double),
                -- ^ the global time of the model
-               tsGlobalTimeTimestamp :: IORef (Maybe UTCTime)
+               tsGlobalTimeTimestamp :: IORef (Maybe UTCTime),
                -- ^ the global time timestamp
+               tsLogicalProcessValidationTimestamp :: IORef UTCTime
+               -- ^ the logical process validation timestamp
              }
 
 -- | The information about the logical process.
 data LogicalProcessInfo =
-  LogicalProcessInfo { lpLocalTime :: IORef (Maybe Double),
+  LogicalProcessInfo { lpId :: DP.ProcessId,
+                       -- ^ the logical process identifier
+                       lpLocalTime :: IORef (Maybe Double),
                        -- ^ the local time of the process
+                       lpTimestamp :: IORef UTCTime,
+                       -- ^ the logical process timestamp
                        lpMonitorRef :: Maybe DP.MonitorRef
                        -- ^ the logical process monitor reference
                      }
@@ -97,7 +117,8 @@ defaultTimeServerParams =
                      tsProcessMonitoringEnabled = False,
                      tsProcessMonitoringDelay = 3000000,
                      tsProcessReconnectingEnabled = False,
-                     tsProcessReconnectingDelay = 5000000
+                     tsProcessReconnectingDelay = 5000000,
+                     tsStrategy = TerminateDueToLogicalProcessTimeout 300000000
                    }
 
 -- | Create a new time server by the specified initial quorum and parameters.
@@ -109,6 +130,7 @@ newTimeServer n ps =
      s  <- newIORef S.empty
      t0 <- newIORef Nothing
      t' <- newIORef Nothing
+     t2 <- getCurrentTime >>= newIORef
      return TimeServer { tsParams = ps,
                          tsInitQuorum = n,
                          tsInInit = f,
@@ -116,7 +138,8 @@ newTimeServer n ps =
                          tsProcesses = m,
                          tsProcessesInFind = s,
                          tsGlobalTime = t0,
-                         tsGlobalTimeTimestamp = t'
+                         tsGlobalTimeTimestamp = t',
+                         tsLogicalProcessValidationTimestamp = t2
                        }
 
 -- | Process the time server message.
@@ -131,8 +154,9 @@ processTimeServerMessage server (RegisterLogicalProcessMessage pid) =
          "Time Server: already registered process identifier " ++ show pid
        Nothing  ->
          do t <- newIORef Nothing
+            utc <- getCurrentTime >>= newIORef
             modifyIORef (tsProcesses server) $
-              M.insert pid LogicalProcessInfo { lpLocalTime = t, lpMonitorRef = Nothing }
+              M.insert pid LogicalProcessInfo { lpId = pid, lpLocalTime = t, lpTimestamp = utc, lpMonitorRef = Nothing }
             return $
               do when (tsProcessMonitoringEnabled $ tsParams server) $
                    do logTimeServer server INFO $
@@ -206,7 +230,9 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
             processTimeServerMessage server (RegisterLogicalProcessMessage pid)
             processTimeServerMessage server (LocalTimeMessage pid t')
        Just x  ->
-         do writeIORef (lpLocalTime x) (Just t')
+         do utc <- getCurrentTime
+            writeIORef (lpLocalTime x) (Just t')
+            writeIORef (lpTimestamp x) utc
             modifyIORef (tsProcessesInFind server) $
               S.delete pid
             return $
@@ -341,6 +367,21 @@ timeServerGlobalTime server =
                            Just _  ->
                              loop zs' (liftM2 min t acc)
 
+-- | Return a logical process with the minimal timestamp.
+minTimestampLogicalProcess :: TimeServer -> IO (Maybe LogicalProcessInfo)
+minTimestampLogicalProcess server =
+  do zs <- fmap M.assocs $ readIORef (tsProcesses server)
+     case zs of
+       [] -> return Nothing
+       ((pid, x) : zs') -> loop zs x
+         where loop [] acc = return (Just acc)
+               loop ((pid, x) : zs') acc =
+                 do t0 <- readIORef (lpTimestamp acc)
+                    t  <- readIORef (lpTimestamp x)
+                    if t0 <= t
+                      then loop zs' acc
+                      else loop zs' x
+
 -- | Start terminating the time server.
 startTerminatingTimeServer :: TimeServer -> DP.Process ()
 startTerminatingTimeServer server =
@@ -411,12 +452,15 @@ timeServer n ps =
                      ---
                      return ()
               utc <- liftIO getCurrentTime
+              validation <- liftIO $ readIORef (tsLogicalProcessValidationTimestamp server)
               timestamp <- liftIO $ readIORef (tsGlobalTimeTimestamp server)
+              when (timeSyncTimeoutExceeded server validation utc) $
+                validateLogicalProcesses server utc
               case timestamp of
-                Just x | shouldResetComputingTimeServerGlobalTime server x utc ->
+                Just x | timeSyncTimeoutExceeded server x utc ->
                   resetComputingTimeServerGlobalTime server
                 _ -> return ()
-              if shouldComputeTimeServerGlobalTime server utc0 utc
+              if timeSyncDelayExceeded server utc0 utc
                 then do tryComputeTimeServerGlobalTime server
                         loop utc
                 else loop utc0
@@ -465,17 +509,57 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
             in C.catch action (handleTimeServerException server)
           return ()
 
--- | Test whether should compute the time server global time.
-shouldComputeTimeServerGlobalTime :: TimeServer -> UTCTime -> UTCTime -> Bool
-shouldComputeTimeServerGlobalTime server utc0 utc =
+-- | Test whether the sychronization delay has been exceeded.
+timeSyncDelayExceeded :: TimeServer -> UTCTime -> UTCTime -> Bool
+timeSyncDelayExceeded server utc0 utc =
   let dt = fromRational $ toRational (diffUTCTime utc utc0)
   in secondsToMicroseconds dt > (tsTimeSyncDelay $ tsParams server)
 
--- | Test whether should reset computing the time server global time.
-shouldResetComputingTimeServerGlobalTime :: TimeServer -> UTCTime -> UTCTime -> Bool
-shouldResetComputingTimeServerGlobalTime server utc0 utc =
+-- | Test whether the synchronization timeout has been exceeded.
+timeSyncTimeoutExceeded :: TimeServer -> UTCTime -> UTCTime -> Bool
+timeSyncTimeoutExceeded server utc0 utc =
   let dt = fromRational $ toRational (diffUTCTime utc utc0)
   in secondsToMicroseconds dt > (tsTimeSyncTimeout $ tsParams server)
+
+-- | Get the difference between the specified time and the logical process timestamp.
+diffLogicalProcessTimestamp :: UTCTime -> LogicalProcessInfo -> IO Int
+diffLogicalProcessTimestamp utc lp =
+  do utc0 <- readIORef (lpTimestamp lp)
+     let dt = fromRational $ toRational (diffUTCTime utc utc0)
+     return $ secondsToMicroseconds dt
+
+-- | Validate the logical processes.
+validateLogicalProcesses :: TimeServer -> UTCTime -> DP.Process ()
+validateLogicalProcesses server utc =
+  do logTimeServer server NOTICE $
+       "Time Server: validating the logical processes"
+     liftIO $
+       writeIORef (tsLogicalProcessValidationTimestamp server) utc
+     case tsStrategy (tsParams server) of
+       WaitForLogicalProcess ->
+         return ()
+       TerminateDueToLogicalProcessTimeout timeout ->
+         do x <- liftIO $ minTimestampLogicalProcess server
+            case x of
+              Just lp ->
+                do diff <- liftIO $ diffLogicalProcessTimestamp utc lp
+                   when (diff > timeout) $
+                     do logTimeServer server WARNING $
+                          "Time Server: terminating due to the exceeded logical process timeout"
+                        DP.terminate
+              Nothing ->
+                return ()
+       UnregisterLogicalProcessDueToTimeout timeout ->
+         do x <- liftIO $ minTimestampLogicalProcess server
+            case x of
+              Just lp ->
+                do diff <- liftIO $ diffLogicalProcessTimestamp utc lp
+                   when (diff > timeout) $
+                     do logTimeServer server WARNING $
+                          "Time Server: unregistering the logical process due to the exceeded timeout"
+                        processTimeServerMessage server (UnregisterLogicalProcessMessage $ lpId lp)
+              Nothing ->
+                return ()
 
 -- | A curried version of 'timeServer' for starting the time server on remote node.
 curryTimeServer :: (Int, TimeServerParams) -> DP.Process ()

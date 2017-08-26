@@ -11,6 +11,7 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.TimeServer
        (TimeServerParams(..),
+        TimeServerStrategy(..),
         defaultTimeServerParams,
         timeServer,
         curryTimeServer) where
