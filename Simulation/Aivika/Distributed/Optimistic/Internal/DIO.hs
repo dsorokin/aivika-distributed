@@ -320,9 +320,9 @@ runDIO m ps serverId =
               case x of
                 Nothing -> return ()
                 Just (InternalLogicalProcessMessage m) ->
-                  liftIO $
-                  do stampTimeServerMessage m timeServerTimestamp
-                     writeChannel ch m
+                  do processTimeServerMessage m serverId timeServerTimestamp
+                     liftIO $
+                       writeChannel ch m
                 Just (InternalProcessMonitorNotification m@(DP.ProcessMonitorNotification _ _ _)) ->
                   handleProcessMonitorNotification m ps ch serverId
                 Just (InternalInboxProcessMessage m) ->
@@ -502,11 +502,18 @@ monitorProcessDIO pid =
        else liftDistributedUnsafe $
             logProcess ps WARNING "Ignored the process monitoring as it was disabled in the DIO computation parameters"
 
--- | Stamp the time server message in a stream of messages destined for the logical process.
-stampTimeServerMessage :: LogicalProcessMessage -> IORef UTCTime -> IO ()
-stampTimeServerMessage ComputeLocalTimeMessage r = getCurrentTime >>= writeIORef r
-stampTimeServerMessage (GlobalTimeMessage _)   r = getCurrentTime >>= writeIORef r
-stampTimeServerMessage _                       r = return ()
+-- | Process the time server message in a stream of messages destined for the logical process.
+processTimeServerMessage :: LogicalProcessMessage -> DP.ProcessId -> IORef UTCTime -> DP.Process ()
+processTimeServerMessage ComputeLocalTimeMessage serverId r =
+  do liftIO $
+       getCurrentTime >>= writeIORef r
+     inboxId <- DP.getSelfPid
+     DP.send serverId (ComputeLocalTimeAcknowledgementMessage inboxId)
+processTimeServerMessage (GlobalTimeMessage _) serverId r =
+  liftIO $
+  getCurrentTime >>= writeIORef r
+processTimeServerMessage _ serverId r =
+  return ()
 
 -- | Validate the time server by the specified inbox and recent timestamp.
 validateTimeServer :: DIOParams -> DP.ProcessId -> IORef UTCTime -> DP.Process ()

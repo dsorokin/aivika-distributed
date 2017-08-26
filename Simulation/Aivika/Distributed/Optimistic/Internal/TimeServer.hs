@@ -243,6 +243,21 @@ processTimeServerMessage server (LocalTimeMessage pid t') =
               S.delete pid
             return $
               tryProvideTimeServerGlobalTime server
+processTimeServerMessage server (ComputeLocalTimeAcknowledgementMessage pid) =
+  join $ liftIO $
+  do m <- readIORef (tsProcesses server)
+     case M.lookup pid m of
+       Nothing ->
+         return $
+         do logTimeServer server WARNING $
+              "Time Server: unknown process identifier " ++ show pid
+            processTimeServerMessage server (RegisterLogicalProcessMessage pid)
+            processTimeServerMessage server (ComputeLocalTimeAcknowledgementMessage pid)
+       Just x  ->
+         do utc <- getCurrentTime
+            writeIORef (lpTimestamp x) utc
+            return $
+              return ()
 processTimeServerMessage server (ReMonitorTimeServerMessage pids) =
   do forM_ pids $ \pid ->
        do ---

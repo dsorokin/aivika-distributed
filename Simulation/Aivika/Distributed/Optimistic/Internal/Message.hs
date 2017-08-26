@@ -134,6 +134,8 @@ data TimeServerMessage = RegisterLogicalProcessMessage DP.ProcessId
                          -- ^ unregister the logical process from the time server
                        | TerminateTimeServerMessage DP.ProcessId
                          -- ^ the logical process asked to terminate the time server
+                       | ComputeLocalTimeAcknowledgementMessage DP.ProcessId
+                         -- ^ the acknowledgement message after the server asked to compute the local time
                        | RequestGlobalTimeMessage DP.ProcessId
                          -- ^ the logical process requested for the global minimum time
                        | LocalTimeMessage DP.ProcessId Double
