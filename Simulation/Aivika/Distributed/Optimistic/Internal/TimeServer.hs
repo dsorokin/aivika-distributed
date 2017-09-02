@@ -13,9 +13,12 @@
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
        (TimeServerParams(..),
+        TimeServerEnv(..),
         TimeServerStrategy(..),
         defaultTimeServerParams,
+        defaultTimeServerEnv,
         timeServer,
+        timeServerWithEnv,
         curryTimeServer) where
 
 import qualified Data.Map as M
@@ -37,11 +40,14 @@ import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.State
 
 -- | The time server parameters.
 data TimeServerParams =
   TimeServerParams { tsLoggingPriority :: Priority,
                      -- ^ the logging priority
+                     tsName :: String,
+                     -- ^ the monitoring name of the time server
                      tsReceiveTimeout :: Int,
                      -- ^ the timeout in microseconds used when receiving messages
                      tsTimeSyncTimeout :: Int,
@@ -56,11 +62,21 @@ data TimeServerParams =
                      -- ^ whether the automatic reconnecting to processes is enabled when enabled monitoring
                      tsProcessReconnectingDelay :: Int,
                      -- ^ the delay in microseconds before reconnecting
+                     tsSimulationMonitoringInterval :: Int,
+                     -- ^ the interval in microseconds between sending the simulation monitoring messages
+                     tsSimulationMonitoringTimeout :: Int,
+                     -- ^ the timeout in microseconds when processing the simulation monitoring messages
                      tsStrategy :: TimeServerStrategy
                      -- ^ the time server strategy
                    } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerParams
+
+-- | Those time server environment parameters that cannot be serialized and passed to another process via the net.
+data TimeServerEnv =
+  TimeServerEnv { tsSimulationMonitoringAction :: Maybe (TimeServerState -> DP.Process ())
+                  -- ^ the simulation monitoring action
+                }
 
 -- | The time server strategy.
 data TimeServerStrategy = WaitIndefinitelyForLogicalProcess
@@ -117,6 +133,7 @@ data LogicalProcessInfo =
 defaultTimeServerParams :: TimeServerParams
 defaultTimeServerParams =
   TimeServerParams { tsLoggingPriority = WARNING,
+                     tsName = "Time Server",
                      tsReceiveTimeout = 100000,
                      tsTimeSyncTimeout = 60000000,
                      tsTimeSyncDelay = 1000000,
@@ -124,8 +141,15 @@ defaultTimeServerParams =
                      tsProcessMonitoringDelay = 3000000,
                      tsProcessReconnectingEnabled = False,
                      tsProcessReconnectingDelay = 5000000,
+                     tsSimulationMonitoringInterval = 30000000,
+                     tsSimulationMonitoringTimeout = 100000,
                      tsStrategy = TerminateDueToLogicalProcessTimeout 300000000
                    }
+
+-- | The default time server environment parameters.
+defaultTimeServerEnv :: TimeServerEnv
+defaultTimeServerEnv =
+  TimeServerEnv { tsSimulationMonitoringAction = Nothing }
 
 -- | Create a new time server by the specified initial quorum and parameters.
 newTimeServer :: Int -> TimeServerParams -> IO TimeServer
@@ -258,6 +282,17 @@ processTimeServerMessage server (ComputeLocalTimeAcknowledgementMessage pid) =
             writeIORef (lpTimestamp x) utc
             return $
               return ()
+processTimeServerMessage server (ProvideTimeServerStateMessage pid) =
+  do let ps   = tsParams server
+         name = tsName ps
+     serverId <- DP.getSelfPid
+     t <- liftIO $ readIORef (tsGlobalTime server)
+     m <- liftIO $ readIORef (tsProcesses server)
+     let msg = TimeServerState { tsStateId = serverId,
+                                 tsStateName = name,
+                                 tsStateGlobalVirtualTime = t,
+                                 tsStateLogicalProcesses = M.keys m }
+     DP.send pid msg
 processTimeServerMessage server (ReMonitorTimeServerMessage pids) =
   do forM_ pids $ \pid ->
        do ---
@@ -451,7 +486,11 @@ handleTimeServerException server e =
 -- The quorum defines the number of logical processes that must be registered in
 -- the time server before the global time synchronization is started.
 timeServer :: Int -> TimeServerParams -> DP.Process ()
-timeServer n ps =
+timeServer n ps = timeServerWithEnv n ps defaultTimeServerEnv
+
+-- | A full version of 'timeServer' that allows specifying the environment parameters.
+timeServerWithEnv :: Int -> TimeServerParams -> TimeServerEnv -> DP.Process ()
+timeServerWithEnv n ps env =
   do server <- liftIO $ newTimeServer n ps
      logTimeServer server INFO "Time Server: starting..."
      let loop utc0 =
@@ -491,6 +530,31 @@ timeServer n ps =
                 then do tryComputeTimeServerGlobalTime server
                         loop utc
                 else loop utc0
+     case tsSimulationMonitoringAction env of
+       Nothing  -> return ()
+       Just act ->
+         do serverId  <- DP.getSelfPid
+            monitorId <-
+              DP.spawnLocal $
+              let loop =
+                    do f <- liftIO $ readIORef (tsTerminating server)
+                       unless f $
+                         do x <- DP.expectTimeout (tsSimulationMonitoringTimeout ps)
+                            case x of
+                              Nothing -> return ()
+                              Just st -> act st
+                            loop
+              in C.catch loop (handleTimeServerException server)
+            DP.spawnLocal $
+              let loop =
+                    do f <- liftIO $ readIORef (tsTerminating server)
+                       unless f $
+                         do liftIO $
+                              threadDelay (tsSimulationMonitoringInterval ps)
+                            DP.send serverId (ProvideTimeServerStateMessage monitorId)
+                            loop
+              in C.catch loop (handleTimeServerException server)
+            return ()
      C.catch (liftIO getCurrentTime >>= loop) (handleTimeServerException server) 
 
 -- | Handle the process monitor notification.

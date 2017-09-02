@@ -50,6 +50,7 @@ import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMe
 import Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref.Strict as R
+import Simulation.Aivika.Distributed.Optimistic.State
 
 -- | Convert microseconds to seconds.
 microsecondsToSeconds :: Int -> Rational
@@ -422,11 +423,23 @@ processChannelMessage x@(ReconnectProcessMessage pid) =
      ---
      invokeEvent p $
        reconnectProcess pid
-processChannelMessage AbortSimulationMessage =
+processChannelMessage x@(ProvideLogicalProcessStateMessage pid) =
   TimeWarp $ \p ->
-  invokeEvent p $
-  throwEvent $
-  SimulationAbort "Aborted by the outer process."
+  do ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     invokeEvent p $
+       sendState pid
+processChannelMessage x@AbortSimulationMessage =
+  TimeWarp $ \p ->
+  do ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     invokeEvent p $
+       throwEvent $
+       SimulationAbort "Aborted by the outer process."
 
 -- | Return the local minimum time.
 getLocalTime :: Event DIO Double
@@ -825,3 +838,38 @@ expectEvent m cont =
                   Just _  -> loop
                   Nothing -> loop'
      loop
+
+-- | Send the simulation monitoring message about the current state of the logical process.
+sendState :: DP.ProcessId -> Event DIO ()
+sendState pid =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     pq <- invokeEvent p $ R.readRef (queuePQ q)
+     n1 <- liftIOUnsafe $ logSize (queueLog q)
+     n2 <- liftIOUnsafe $ inputMessageQueueSize (queueInputMessages q)
+     n3 <- liftIOUnsafe $ outputMessageQueueSize (queueOutputMessages q)
+     n4 <- liftIOUnsafe $ transientMessageQueueSize (queueTransientMessages q)
+     n5 <- liftIOUnsafe $ inputMessageQueueVersion (queueInputMessages q)
+     let n6 = PQ.queueCount pq
+         sc = pointSpecs p
+         t0 = spcStartTime sc
+         t2 = spcStopTime sc
+     tq <- liftIOUnsafe $ readIORef (queueTime q)
+     t' <- invokeEvent p getLocalTime
+     ps <- dioParams
+     let name = dioName ps
+     inbox <- messageInboxId
+     liftDistributedUnsafe $
+       DP.send pid $
+       LogicalProcessState { lpStateId = inbox,
+                             lpStateName = name,
+                             lpStateStartTime = t0,
+                             lpStateStopTime = t2,
+                             lpStateLocalTime = t',
+                             lpStateEventQueueTime = tq,
+                             lpStateEventQueueSize = n6,
+                             lpStateLogSize = n1,
+                             lpStateInputMessageCount = n2,
+                             lpStateOutputMessageCount = n3,
+                             lpStateTransientMessageCount = n4,
+                             lpStateRollbackCount = n5 }

@@ -30,6 +30,8 @@ import Data.Binary
 import qualified Control.Distributed.Process as DP
 import Control.Distributed.Process.Serializable
 
+import Simulation.Aivika.Distributed.Optimistic.State
+
 -- | Represents a message.
 data Message =
   Message { messageSequenceNo :: Int,
@@ -123,6 +125,8 @@ data LogicalProcessMessage = QueueMessage Message
                              -- ^ the process monitor notification
                            | ReconnectProcessMessage DP.ProcessId
                              -- ^ finish reconnecting to the specified process
+                           | ProvideLogicalProcessStateMessage DP.ProcessId
+                             -- ^ provide the logical process state
                            | AbortSimulationMessage
                              -- ^ abort the simulation
                            deriving (Show, Typeable, Generic)
@@ -142,6 +146,8 @@ data TimeServerMessage = RegisterLogicalProcessMessage DP.ProcessId
                          -- ^ the logical process requested for the global minimum time
                        | LocalTimeMessage DP.ProcessId Double
                          -- ^ the logical process sent its local minimum time
+                       | ProvideTimeServerStateMessage DP.ProcessId
+                         -- ^ send the time server monitoring state message
                        | ReMonitorTimeServerMessage [DP.ProcessId]
                          -- ^ re-monitor the logical processes by their identifiers
                        deriving (Eq, Show, Typeable, Generic)

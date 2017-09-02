@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         0.7.2
+version:         0.7.3
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package and allows running parallel distributed simulations.
@@ -58,8 +58,11 @@ tested-with:     GHC == 7.10.1
 extra-source-files:  tests/Guard1.hs
                      tests/MachRep1.hs
                      tests/MachRep1Simple.hs
+                     tests/MachRep1SimpleWithMonitoring.hs
                      tests/MachRep2.hs
                      tests/MachRep2Distributed.hs
+                     tests/MachRep2DistributedReproducible.hs
+                     tests/MachRep2DistributedReproducibleFaultTolerant.hs
                      tests/MachRep2Reproducible.hs
                      tests/MachRep2Sync.hs
                      tests/MachRep2SyncIO.hs
@@ -80,6 +83,7 @@ library
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base.Lazy
                      Simulation.Aivika.Distributed.Optimistic.Ref.Base.Strict
+                     Simulation.Aivika.Distributed.Optimistic.State
                      Simulation.Aivika.Distributed.Optimistic.TimeServer
 
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.Channel

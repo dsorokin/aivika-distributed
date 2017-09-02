@@ -14,9 +14,12 @@
 module Simulation.Aivika.Distributed.Optimistic.DIO
        (DIO,
         DIOParams(..),
+        DIOEnv(..),
         DIOStrategy(..),
         runDIO,
+        runDIOWithEnv,
         defaultDIOParams,
+        defaultDIOEnv,
         dioParams,
         messageInboxId,
         timeServerId,

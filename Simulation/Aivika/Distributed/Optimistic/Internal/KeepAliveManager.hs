@@ -14,6 +14,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.KeepAliveManager
         KeepAliveParams(..),
         newKeepAliveManager,
         addKeepAliveReceiver,
+        existsKeepAliveReceiver,
         trySendKeepAlive,
         trySendKeepAliveUTC) where
 
@@ -61,6 +62,12 @@ addKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> IO ()
 addKeepAliveReceiver manager pid =
   modifyIORef (keepAliveReceivers manager) $
   S.insert pid
+
+-- | Whether the keep-alive message receiver exists.
+existsKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> IO Bool
+existsKeepAliveReceiver manager pid =
+  readIORef (keepAliveReceivers manager) >>=
+  return . S.member pid
 
 -- | Try to send a keep-alive message.
 trySendKeepAlive :: KeepAliveManager -> DP.Process ()

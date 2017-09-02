@@ -14,10 +14,13 @@
 module Simulation.Aivika.Distributed.Optimistic.Internal.DIO
        (DIO(..),
         DIOParams(..),
+        DIOEnv(..),
         DIOStrategy(..),
         invokeDIO,
         runDIO,
+        runDIOWithEnv,
         defaultDIOParams,
+        defaultDIOEnv,
         terminateDIO,
         registerDIO,
         unregisterDIO,
@@ -61,11 +64,14 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeServer
 import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.KeepAliveManager
+import Simulation.Aivika.Distributed.Optimistic.State
 
 -- | The parameters for the 'DIO' computation.
 data DIOParams =
   DIOParams { dioLoggingPriority :: Priority,
               -- ^ The logging priority
+              dioName :: String,
+              -- ^ The name of the logical process.
               dioUndoableLogSizeThreshold :: Int,
               -- ^ The undoable log size threshold used for detecting an overflow
               dioOutputMessageQueueSizeThreshold :: Int,
@@ -91,11 +97,21 @@ data DIOParams =
               -- ^ The interval in microseconds for sending keep-alive messages
               dioTimeServerAcknowledgementTimeout :: Int,
               -- ^ The timeout in microseconds for receiving an acknowledgement message from the time server
+              dioSimulationMonitoringInterval :: Int,
+              -- ^ The interval in microseconds between sending the simulation monitoring messages
+              dioSimulationMonitoringTimeout :: Int,
+              -- ^ The timeout in microseconds when processing the monitoring messages
               dioStrategy :: DIOStrategy
               -- ^ The logical process strategy
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
+
+-- | Those 'DIO' environment parameters that cannot be serialized and passed to another process via the net.
+data DIOEnv =
+  DIOEnv { dioSimulationMonitoringAction :: Maybe (LogicalProcessState -> DP.Process ())
+           -- ^ The simulation monitoring action
+         }
 
 -- | The logical process strategy.
 data DIOStrategy = WaitIndefinitelyForTimeServer
@@ -176,6 +192,7 @@ liftDistributedUnsafe = DIO . const
 defaultDIOParams :: DIOParams
 defaultDIOParams =
   DIOParams { dioLoggingPriority = WARNING,
+              dioName = "LP",
               dioUndoableLogSizeThreshold = 1000000,
               dioOutputMessageQueueSizeThreshold = 10000,
               dioTransientMessageQueueSizeThreshold = 10000,
@@ -188,8 +205,15 @@ defaultDIOParams =
               dioProcessReconnectingDelay = 5000000,
               dioKeepAliveInterval = 5000000,
               dioTimeServerAcknowledgementTimeout = 5000000,
+              dioSimulationMonitoringInterval = 30000000,
+              dioSimulationMonitoringTimeout = 100000,
               dioStrategy = TerminateDueToTimeServerTimeout 300000000
             }
+
+-- | The default environment parameters for the 'DIO' computation
+defaultDIOEnv :: DIOEnv
+defaultDIOEnv =
+  DIOEnv { dioSimulationMonitoringAction = Nothing }
 
 -- | Return the computation context.
 dioContext :: DIO DIOContext
@@ -295,7 +319,11 @@ handleException ps e =
 -- | Run the computation using the specified parameters along with time server process
 -- identifier and return the inbox process identifier and a new simulation process.
 runDIO :: DIO a -> DIOParams -> DP.ProcessId -> DP.Process (DP.ProcessId, DP.Process a)
-runDIO m ps serverId =
+runDIO m ps serverId = runDIOWithEnv m ps defaultDIOEnv serverId
+
+-- | A full version of 'runDIO' that also allows specifying the environment parameters.
+runDIOWithEnv :: DIO a -> DIOParams -> DIOEnv -> DP.ProcessId -> DP.Process (DP.ProcessId, DP.Process a)
+runDIOWithEnv m ps env serverId =
   do ch <- liftIO newChannel
      let keepAliveParams =
            KeepAliveParams { keepAliveLoggingPriority = dioLoggingPriority ps,
@@ -306,7 +334,7 @@ runDIO m ps serverId =
      unregisteredFromTimeServer <- liftIO $ newTVarIO False
      timeServerTerminating <- liftIO $ newTVarIO False
      timeServerTimestamp <- liftIO $ getCurrentTime >>= newIORef
-     let loop =
+     let loop0 =
            forever $
            do let f1 :: LogicalProcessMessage -> DP.Process InternalLogicalProcessMessage
                   f1 x = return (InternalLogicalProcessMessage x)
@@ -351,10 +379,12 @@ runDIO m ps serverId =
                       do ---
                          logProcess ps INFO $ "Monitoring process " ++ show pid
                          ---
-                         DP.monitor pid
-                         liftIO $
-                           addKeepAliveReceiver keepAliveManager pid
-                         return ()
+                         f <- liftIO $
+                              existsKeepAliveReceiver keepAliveManager pid
+                         unless f $
+                           do DP.monitor pid
+                              liftIO $
+                                addKeepAliveReceiver keepAliveManager pid
                     ReMonitorProcessMessage pids ->
                       handleReMonitorProcessMessage pids ps ch
                     TrySendKeepAliveMessage ->
@@ -393,6 +423,11 @@ runDIO m ps serverId =
                      logProcess ps DEBUG $ "Received " ++ show m
                      ---
                      return ()
+         loop =
+           C.finally loop0
+           (liftIO $
+            do atomicWriteIORef terminated True
+               writeChannel ch AbortSimulationMessage)
      inboxId <-
        DP.spawnLocal $
        C.catch loop (handleException ps)
@@ -419,6 +454,30 @@ runDIO m ps serverId =
                        do validateTimeServer ps inboxId timeServerTimestamp
                           loop
        in C.catch loop (handleException ps)
+     case dioSimulationMonitoringAction env of
+       Nothing  -> return ()
+       Just act ->
+         do monitorId <-
+              DP.spawnLocal $
+              let loop =
+                    do f <- liftIO $ readIORef terminated
+                       unless f $
+                         do x <- DP.expectTimeout (dioSimulationMonitoringTimeout ps)
+                            case x of
+                              Nothing -> return ()
+                              Just st -> act st
+                            loop
+              in C.catch loop (handleException ps)
+            DP.spawnLocal $
+              let loop =
+                    do f <- liftIO $ readIORef terminated
+                       unless f $
+                         do liftIO $
+                              do threadDelay (dioSimulationMonitoringInterval ps)
+                                 writeChannel ch (ProvideLogicalProcessStateMessage monitorId)
+                            loop
+              in C.catch loop (handleException ps)
+            return ()
      let simulation =
            unDIO m DIOContext { dioChannel = ch,
                                 dioInboxId = inboxId,

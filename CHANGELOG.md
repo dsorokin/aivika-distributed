@@ -1,4 +1,9 @@
 
+Version 0.7.3
+-----
+
+* Updated so that external software tools could monitor the distributed simulation.
+
 Version 0.7.2
 -----
 
