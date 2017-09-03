@@ -58,7 +58,6 @@ tested-with:     GHC == 7.10.1
 extra-source-files:  tests/Guard1.hs
                      tests/MachRep1.hs
                      tests/MachRep1Simple.hs
-                     tests/MachRep1SimpleWithMonitoring.hs
                      tests/MachRep2.hs
                      tests/MachRep2Distributed.hs
                      tests/MachRep2DistributedReproducible.hs
