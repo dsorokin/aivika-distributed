@@ -105,6 +105,8 @@ data TimeServer =
                -- ^ whether the time server is in the initial mode
                tsTerminating :: IORef Bool,
                -- ^ whether the time server is in the terminating mode
+               tsTerminated :: IORef Bool,
+               -- ^ whether the server is terminated
                tsProcesses :: IORef (M.Map DP.ProcessId LogicalProcessInfo),
                -- ^ the information about logical processes
                tsProcessesInFind :: IORef (S.Set DP.ProcessId),
@@ -156,6 +158,7 @@ newTimeServer :: Int -> TimeServerParams -> IO TimeServer
 newTimeServer n ps =
   do f  <- newIORef True
      ft <- newIORef False
+     fe <- newIORef False
      m  <- newIORef M.empty
      s  <- newIORef S.empty
      t0 <- newIORef Nothing
@@ -165,6 +168,7 @@ newTimeServer n ps =
                          tsInitQuorum = n,
                          tsInInit = f,
                          tsTerminating = ft,
+                         tsTerminated = fe,
                          tsProcesses = m,
                          tsProcessesInFind = s,
                          tsGlobalTime = t0,
@@ -530,6 +534,11 @@ timeServerWithEnv n ps env =
                 then do tryComputeTimeServerGlobalTime server
                         loop utc
                 else loop utc0
+         loop' utc0 =
+           C.finally
+           (loop utc0)
+           (liftIO $
+            atomicWriteIORef (tsTerminated server) True)
      case tsSimulationMonitoringAction env of
        Nothing  -> return ()
        Just act ->
@@ -537,7 +546,7 @@ timeServerWithEnv n ps env =
             monitorId <-
               DP.spawnLocal $
               let loop =
-                    do f <- liftIO $ readIORef (tsTerminating server)
+                    do f <- liftIO $ readIORef (tsTerminated server)
                        unless f $
                          do x <- DP.expectTimeout (tsSimulationMonitoringTimeout ps)
                             case x of
@@ -547,7 +556,7 @@ timeServerWithEnv n ps env =
               in C.catch loop (handleTimeServerException server)
             DP.spawnLocal $
               let loop =
-                    do f <- liftIO $ readIORef (tsTerminating server)
+                    do f <- liftIO $ readIORef (tsTerminated server)
                        unless f $
                          do liftIO $
                               threadDelay (tsSimulationMonitoringInterval ps)
@@ -555,7 +564,7 @@ timeServerWithEnv n ps env =
                             loop
               in C.catch loop (handleTimeServerException server)
             return ()
-     C.catch (liftIO getCurrentTime >>= loop) (handleTimeServerException server) 
+     C.catch (liftIO getCurrentTime >>= loop') (handleTimeServerException server) 
 
 -- | Handle the process monitor notification.
 handleProcessMonitorNotification :: DP.ProcessMonitorNotification -> TimeServer -> DP.Process ()
