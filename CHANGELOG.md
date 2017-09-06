@@ -1,4 +1,9 @@
 
+Version 0.7.4
+-----
+
+* A more graceful termination of the time server in case of self-destruction by time-out.
+
 Version 0.7.3
 -----
 

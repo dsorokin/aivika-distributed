@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         0.7.3
+version:         0.7.4
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package and allows running parallel distributed simulations.
@@ -25,7 +25,7 @@ description:
     or a set of reports consisting of HTML pages with charts, histograms, links to CSV tables, summary statistics etc.
     Please consult the AivikaSoft [3] website for more details.
     .
-    Regarding the speed of simulation, the rough estimations are as follows. The distributed simulation module is slower up to
+    Regarding the speed of simulation, the rough estimation is as follows. The distributed simulation module is slower up to
     6-9 times in comparison with the sequential aivika [2] simulation library using the equivalent sequential models. 
     Note that you can run up to 7 parallel logical processes on a single 8-core processor computer and run the Time Server 
     process too. On a 36-core processor, you can launch up to 35 logical processes simultaneously.
