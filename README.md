@@ -16,7 +16,7 @@ continents of the Earth, where the computers could be connected through the Inte
 is that this is the optimistic distributed simulation with possible rollbacks. It is assumed that optimistic methods 
 tend to better support the parallelism inherited in the models. 
 
-You may test the distributed simulation using your own laptop only, although the package is still destined to be 
+You can test the distributed simulation using your own laptop only, although the package is still destined to be 
 used with a multi-core computer, or computers connected in the distributed cluster.
 
 There are additional packages that allow you to run the distributed simulation experiments by 
