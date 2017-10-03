@@ -25,13 +25,16 @@ or a set of reports consisting of HTML pages with charts, histograms, links to C
 Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more details.
 
 Regarding the speed of simulation, the rough estimation is as follows. The distributed simulation module is slower up to
-6-9 times in comparison with the sequential [aivika](http://hackage.haskell.org/package/aivika) simulation library 
-using the equivalent sequential models. Note that you can run up to 7 parallel logical processes on a single 
-8-core processor computer and run the Time Server process too. On a 36-core processor, you can launch up to 35 logical 
-processes simultaneously.
+15-40 times in comparison with the sequential aivika [2] simulation library using the equivalent sequential models.
+The estimation has dramatically changed after started using another more fast pseudo-random number generator by default,
+which made the sequential module even more fast. The lower estimation is likely to correspond to complex models.
+The upper estimation will probably correspond to quite simple event-oriented and process-oriented models, where
+the sequential module can be exceptionally fast.
 
-So, this estimation seems to be quite good. At the same time, the message passing between the logical processes can 
-dramatically decrease the speed of distributed simulation, especially if they cause rollbacks. Thus, much depends on 
-the distributed model itself.
+Note that you can run up to 7 parallel logical processes on a single 8-core processor computer and run the Time Server
+process too. On a 36-core processor, you can launch up to 35 logical processes simultaneously.
+
+At the same time, the message passing between the logical processes can dramatically decrease the speed of distributed
+simulation, especially if they cause rollbacks. Thus, much depends on the distributed model itself.
 
 Finally, you can use the following test [model](https://github.com/dsorokin/aivika-distributed-test) as an example.

@@ -1,4 +1,9 @@
 
+Version 0.7.5
+-----
+
+* Updated the estimaton of speed in the description after recent changes in the sequential module.
+
 Version 0.7.4
 -----
 
