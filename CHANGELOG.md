@@ -1,4 +1,9 @@
 
+Version 0.7.4.2
+-----
+
+* Provided a more precise estimation of speed of simulation.
+
 Version 0.7.4.1
 -----
 

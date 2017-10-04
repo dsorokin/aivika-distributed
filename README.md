@@ -25,10 +25,10 @@ or a set of reports consisting of HTML pages with charts, histograms, links to C
 Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more details.
 
 Regarding the speed of simulation, the rough estimation is as follows. The distributed simulation module is slower up to
-15-40 times in comparison with the sequential aivika [2] simulation library using the equivalent sequential models.
+12-30 times in comparison with the sequential aivika [2] simulation library using the equivalent sequential models.
 The estimation has dramatically changed after started using another more fast pseudo-random number generator by default,
-which made the sequential module even more fast. The lower estimation is likely to correspond to complex models.
-The upper estimation will probably correspond to quite simple event-oriented and process-oriented models, where
+which made the sequential module even more fast. The lower estimation in 12 times is likely to correspond to complex models. 
+The upper estimation in 30 times will probably correspond to quite simple event-oriented and process-oriented models, where 
 the sequential module can be exceptionally fast.
 
 Note that you can run up to 7 parallel logical processes on a single 8-core processor computer and run the Time Server
