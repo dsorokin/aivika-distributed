@@ -312,7 +312,7 @@ data InternalLogicalProcessMessage = InternalLogicalProcessMessage LogicalProces
 handleException :: DIOParams -> SomeException -> DP.Process ()
 handleException ps e =
   do ---
-     logProcess ps ERROR $ "Exception occured: " ++ show e
+     logProcess ps ERROR $ "Exception occurred: " ++ show e
      ---
      C.throwM e
 

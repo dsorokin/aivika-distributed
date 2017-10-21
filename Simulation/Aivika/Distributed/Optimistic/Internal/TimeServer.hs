@@ -482,7 +482,7 @@ data InternalTimeServerMessage = InternalTimeServerMessage TimeServerMessage
 handleTimeServerException :: TimeServer -> SomeException -> DP.Process ()
 handleTimeServerException server e =
   do ---
-     logTimeServer server ERROR $ "Exception occured: " ++ show e
+     logTimeServer server ERROR $ "Exception occurred: " ++ show e
      ---
      C.throwM e
 
