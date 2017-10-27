@@ -1,4 +1,9 @@
 
+Version 0.8
+-----
+
+* No more restriction on the number of output messages, which would lead to throttling.
+
 Version 0.7.4.2
 -----
 

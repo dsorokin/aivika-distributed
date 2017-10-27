@@ -74,8 +74,6 @@ data DIOParams =
               -- ^ The name of the logical process.
               dioUndoableLogSizeThreshold :: Int,
               -- ^ The undoable log size threshold used for detecting an overflow
-              dioOutputMessageQueueSizeThreshold :: Int,
-              -- ^ The output message queue size threshold used for detecting an overflow
               dioTransientMessageQueueSizeThreshold :: Int,
               -- ^ The transient message queue size threshold used for detecting an overflow
               dioSyncTimeout :: Int,
@@ -194,7 +192,6 @@ defaultDIOParams =
   DIOParams { dioLoggingPriority = WARNING,
               dioName = "LP",
               dioUndoableLogSizeThreshold = 1000000,
-              dioOutputMessageQueueSizeThreshold = 10000,
               dioTransientMessageQueueSizeThreshold = 10000,
               dioSyncTimeout = 60000000,
               dioAllowPrematureIO = False,
