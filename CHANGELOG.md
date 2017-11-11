@@ -1,4 +1,13 @@
 
+Version 1.0
+-----
+
+* Optimized the rollback log.
+
+* Increased the default rollback log threshold.
+
+* Returned the size threshold for the output message queue.
+
 Version 0.8
 -----
 
