@@ -1,6 +1,7 @@
 
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Message

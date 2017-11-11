@@ -1,5 +1,5 @@
 
-{-# LANGUAGE DeriveGeneric, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric, DeriveDataTypeable, MonoLocalBinds #-}
 
 -- |
 -- Module     : Simulation.Aivika.Distributed.Optimistic.Guard
