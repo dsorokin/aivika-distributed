@@ -24,12 +24,13 @@ the Monte-Carlo method. They allow you to save the simulation results in SQL dat
 or a set of reports consisting of HTML pages with charts, histograms, links to CSV tables, summary statistics etc.
 Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more details.
 
-Regarding the speed of simulation, the rough estimation is as follows. The distributed simulation module is slower up to
-12-30 times in comparison with the sequential aivika [2] simulation library using the equivalent sequential models.
-The estimation has dramatically changed after started using another more fast pseudo-random number generator by default,
-which made the sequential module even more fast. The lower estimation in 12 times is likely to correspond to complex models. 
-The upper estimation in 30 times will probably correspond to quite simple event-oriented and process-oriented models, where 
-the sequential module can be exceptionally fast.
+Regarding the speed of simulation, the recent rough estimation is as follows. This estimation may change from 
+version to version. For example, in version 1.0 the rollback log was rewritten, which had a significant effect.
+
+The distributed simulation module is slower up to 8-15 times in comparison with the sequential aivika [2] simulation 
+library using the equivalent sequential models. The lower estimation in 8 times is likely to correspond to complex 
+models. The upper estimation in 15 times will probably correspond to quite simple event-oriented and process-oriented 
+models, where the sequential module can be exceptionally fast. 
 
 Note that you can run up to 7 parallel logical processes on a single 8-core processor computer and run the Time Server
 process too. On a 36-core processor, you can launch up to 35 logical processes simultaneously.
