@@ -7,7 +7,7 @@
 -- Stability  : experimental
 -- Tested with: GHC 7.10.3
 --
--- This module defines an output message queue.
+-- This module defines an undoable log.
 --
 module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
        (UndoableLog,
