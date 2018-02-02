@@ -1,4 +1,11 @@
 
+Version 1.1
+-----
+
+* Added the time horizon parameter.
+
+* Increased a frequency of the global virtual time synchronization.
+
 Version 1.0
 -----
 

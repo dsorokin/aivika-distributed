@@ -197,7 +197,8 @@ runSlaveModel :: (DP.ProcessId, DP.ProcessId) -> DP.Process (DP.ProcessId, DP.Pr
 runSlaveModel (timeServerId, masterId) =
   runDIOWithEnv m ps env timeServerId
   where
-    ps = defaultDIOParams { dioSimulationMonitoringInterval = 5000000 }
+    ps = defaultDIOParams { dioSimulationMonitoringInterval = 5000000,
+                            dioTimeHorizon = Just 100 }
     env = defaultDIOEnv { dioSimulationMonitoringAction = Just monitorSimulation }
     m  = do registerDIO
             runSimulation (slaveModel masterId) specs
@@ -207,7 +208,8 @@ runMasterModel :: DP.ProcessId -> Int -> DP.Process (DP.ProcessId, DP.Process (D
 runMasterModel timeServerId n =
   runDIOWithEnv m ps env timeServerId
   where
-    ps = defaultDIOParams { dioSimulationMonitoringInterval = 5000000 }
+    ps = defaultDIOParams { dioSimulationMonitoringInterval = 5000000,
+                            dioTimeHorizon = Just 100 }
     env = defaultDIOEnv { dioSimulationMonitoringAction = Just monitorSimulation }
     m  = do registerDIO
             a <- runSimulation (masterModel n) specs

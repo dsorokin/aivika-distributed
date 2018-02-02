@@ -220,7 +220,8 @@ runMasterModel timeServerId n =
 master = \backend nodes ->
   do liftIO . putStrLn $ "Slaves: " ++ show nodes
      let n = 2
-         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG }
+         timeServerParams = defaultTimeServerParams { tsLoggingPriority = DEBUG,
+                                                      tsTimeSyncDelay = 1000000 }
      timeServerId <- DP.spawnLocal $ timeServer 3 timeServerParams
      (masterId, masterProcess) <- runMasterModel timeServerId n
      forM_ [1..n] $ \i ->

@@ -295,6 +295,24 @@ isEventOverflow =
                return True
        else return False
 
+-- | Whether the time horizon has exceeded.
+isTimeHorizonExceeded :: Event DIO Bool
+isTimeHorizonExceeded =
+  Event $ \p ->
+  do ps <- dioParams
+     case dioTimeHorizon ps of
+       Nothing -> return False
+       Just th ->
+         do let q = runEventQueue $ pointRun p
+            gvt <- liftIOUnsafe $ readIORef (queueGlobalTime q)
+            t   <- liftIOUnsafe $ readIORef (queueTime q)
+            if t - gvt > th
+              then do logDIO INFO $
+                        "t = " ++ (show $ pointTime p) ++
+                        ": exceeded the time horizon"
+                      return True
+              else return False
+
 -- | Throttle the message channel.
 throttleMessageChannel :: TimeWarp DIO ()
 throttleMessageChannel =
@@ -319,8 +337,12 @@ processChannelMessages =
                invokeTimeWarp p' $ processChannelMessage x
      p' <- invokeEvent p currentEventPoint
      f2 <- invokeEvent p' isEventOverflow
-     when f2 $
-       invokeTimeWarp p' throttleMessageChannel
+     if f2
+       then invokeTimeWarp p' throttleMessageChannel
+       else do f3 <- invokeEvent p' isTimeHorizonExceeded
+               if f3
+                 then invokeTimeWarp p' throttleMessageChannel
+                 else return ()
 
 -- | Process the channel message.
 processChannelMessage :: LogicalProcessMessage -> TimeWarp DIO ()
