@@ -1,4 +1,9 @@
 
+Version 1.1.1
+-----
+
+* Fixed the documentation.
+
 Version 1.1
 -----
 

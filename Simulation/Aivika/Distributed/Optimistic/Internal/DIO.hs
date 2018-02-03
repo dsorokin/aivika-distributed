@@ -71,9 +71,9 @@ data DIOParams =
   DIOParams { dioLoggingPriority :: Priority,
               -- ^ The logging priority
               dioName :: String,
-              -- ^ The time horizon in modeling time units.
-              dioTimeHorizon :: Maybe Double,
               -- ^ The name of the logical process.
+              dioTimeHorizon :: Maybe Double,
+              -- ^ The time horizon in modeling time units.
               dioUndoableLogSizeThreshold :: Int,
               -- ^ The undoable log size threshold used for detecting an overflow
               dioOutputMessageQueueSizeThreshold :: Int,
