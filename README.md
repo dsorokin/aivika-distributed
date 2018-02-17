@@ -39,7 +39,7 @@ When residing the logical processes in a computer with multi-core processor, you
 You should reserve at least 1 core for each logical process, or even reserve 2 cores if the logical process extensively 
 sends and receives messages. Also you should additionally reserve at least 1 or 2 cores for each computational node. 
 These additional processor cores will be used by the GHC run-time system that includes the garbage collector as well. 
-The Aivika distributed module creates a huge amount of short-leaving small objects. Therefore, the garbage collector 
+The Aivika distributed module creates a huge amount of short-living small objects. Therefore, the garbage collector 
 needs at least one core to utilize efficiently these objects.
 
 You should compile your code with options `-O2 -threaded`, but then launch it with run-time options `+RTS -N`.
