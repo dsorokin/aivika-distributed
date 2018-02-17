@@ -7,7 +7,7 @@ the Time Warp method. To synchronize the global virtual time, it uses Samadi's a
 
 Moreover, this package uses the author's modification that allows recovering the distributed
 simulation after temporary connection errors whenever possible. For that, you have to enable explicitly 
-the recovering mode and enable monitoring all logical processes including the specialized Time Server process 
+the recovering mode and enable the monitoring of all logical processes including the specialized Time Server process 
 as it is shown in one of the test examples included in the distribution.
 
 With the recovering mode enabled, you can try to build a distributed simulation using ordinary computers connected
@@ -33,10 +33,14 @@ The lower estimation in 8 times is likely to correspond to complex models. The u
 probably correspond to quite simple event-oriented and process-oriented models, where the sequential module can 
 be exceptionally fast. 
 
-Note that you can run up to 7 parallel logical processes on a single 8-core processor computer and run the Time Server
-process too. On a 36-core processor, you can launch up to 35 logical processes simultaneously.
-
 At the same time, the message passing between the logical processes can dramatically decrease the speed of distributed
 simulation, especially if they cause rollbacks. Thus, much depends on the distributed model itself.
 
-Finally, you can use the following [test model](https://github.com/dsorokin/aivika-distributed-test) as an example.
+When residing the logical processes in a computer with multi-core processor, you should follow the next recommendations. 
+You should reserve at least 1 core for each logical process, or even reserve 2 cores if the logical process extensively 
+sends and receives messages. Also you should additionally reserve at least 1 or 2 cores for each computational node. 
+These additional processor cores will be used by the GHC run-time system that includes the garbage collector as well. 
+The Aivika distributed module creates a huge amount of short-leaving small objects. Therefore, the garbage collector 
+needs at least one core to utilize efficiently these objects.
+
+You should compile your code with options `-O2 -threaded`, but then launch it with run-time options `+RTS -N`.

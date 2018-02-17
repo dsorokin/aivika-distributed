@@ -1,4 +1,9 @@
 
+Version 1.1.2
+-----
+
+* Updated the main page documentation with new recommendations.
+
 Version 1.1.1
 -----
 
