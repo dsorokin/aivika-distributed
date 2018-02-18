@@ -32,7 +32,7 @@ The distributed simulation module is slower up to 8-15 times in comparison with 
 The lower estimation in 8 times is likely to correspond to complex models. The upper estimation in 15 times will 
 probably correspond to quite simple event-oriented and process-oriented models, where the sequential module can 
 be exceptionally fast. At the same time, the message passing between the logical processes can dramatically 
-decrease the speed of distributed simulation, especially if they cause rollbacks. Thus, much depends on 
+decrease the speed of distributed simulation, especially if the messages cause rollbacks. Thus, much depends on 
 the distributed model itself.
 
 When residing the logical processes in a computer with multi-core processor, you should follow the next recommendations. 
