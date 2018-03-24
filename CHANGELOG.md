@@ -1,4 +1,9 @@
 
+Version 1.2
+-----
+
+* Fixed a leak of monitor references that are used in the fault tolerant mode only.
+
 Version 1.1.2
 -----
 

@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         1.1.2
+version:         1.2
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package and allows running parallel distributed simulations.
@@ -53,7 +53,7 @@ description:
 category:        Simulation
 license:         BSD3
 license-file:    LICENSE
-copyright:       (c) 2015-2017. David Sorokin <david.sorokin@gmail.com>
+copyright:       (c) 2015-2018. David Sorokin <david.sorokin@gmail.com>
 author:          David Sorokin
 maintainer:      David Sorokin <david.sorokin@gmail.com>
 homepage:        http://www.aivikasoft.com
