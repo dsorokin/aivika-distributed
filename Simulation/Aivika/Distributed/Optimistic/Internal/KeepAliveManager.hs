@@ -14,11 +14,12 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.KeepAliveManager
         KeepAliveParams(..),
         newKeepAliveManager,
         addKeepAliveReceiver,
+        remonitorKeepAliveReceiver,
         existsKeepAliveReceiver,
         trySendKeepAlive,
         trySendKeepAliveUTC) where
 
-import qualified Data.Set as S
+import qualified Data.Map as M
 import Data.Maybe
 import Data.IORef
 import Data.Time.Clock
@@ -44,35 +45,67 @@ data KeepAliveManager =
                      -- ^ the manager parameter
                      keepAliveTimestamp :: IORef UTCTime,
                      -- ^ the keep alive timestamp
-                     keepAliveReceivers :: IORef (S.Set DP.ProcessId)
+                     keepAliveReceivers :: IORef (M.Map DP.ProcessId KeepAliveReceiver)
                      -- ^ the receivers of the keep-alive messages
                    }
+
+data KeepAliveReceiver =
+  KeepAliveReceiver { keepAliveReceiverProcess :: DP.ProcessId,
+                      -- ^ the receiver of keep-alive messages
+                      keepAliveReceiverMonitor :: IORef DP.MonitorRef
+                      -- ^ a monitor of the keep-alive receiver
+                    }
 
 -- | Create a new keep-alive manager.
 newKeepAliveManager :: KeepAliveParams -> IO KeepAliveManager
 newKeepAliveManager ps =
   do timestamp <- getCurrentTime >>= newIORef
-     receivers <- newIORef S.empty
+     receivers <- newIORef M.empty
      return KeepAliveManager { keepAliveParams = ps,
                                keepAliveTimestamp = timestamp,
                                keepAliveReceivers = receivers }
 
 -- | Add the keep-alive message receiver.
-addKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> IO ()
+addKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> DP.Process ()
 addKeepAliveReceiver manager pid =
-  modifyIORef (keepAliveReceivers manager) $
-  S.insert pid
+  do ---
+     logKeepAliveManager manager INFO $ "Monitoring process " ++ show pid
+     ---
+     r  <- DP.monitor pid
+     r2 <- liftIO $ newIORef r
+     let x = KeepAliveReceiver pid r2
+     liftIO $
+       modifyIORef (keepAliveReceivers manager) $
+       M.insert pid x
+
+-- | Remonitor the keep-alive message receiver.
+remonitorKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> DP.Process ()
+remonitorKeepAliveReceiver manager pid =
+  do rs <- liftIO $ readIORef (keepAliveReceivers manager)
+     case M.lookup pid rs of
+       Nothing ->
+         do ---
+            logKeepAliveManager manager WARNING $ "Could not find the monitored process " ++ show pid
+            ---
+       Just x ->
+         do ---
+            logKeepAliveManager manager NOTICE $ "Re-monitoring process " ++ show pid
+            ---
+            r  <- liftIO $ readIORef (keepAliveReceiverMonitor x) 
+            r' <- DP.monitor pid
+            DP.unmonitor r
+            liftIO $ writeIORef (keepAliveReceiverMonitor x) r'
 
 -- | Whether the keep-alive message receiver exists.
 existsKeepAliveReceiver :: KeepAliveManager -> DP.ProcessId -> IO Bool
 existsKeepAliveReceiver manager pid =
   readIORef (keepAliveReceivers manager) >>=
-  return . S.member pid
+  return . M.member pid
 
 -- | Try to send a keep-alive message.
 trySendKeepAlive :: KeepAliveManager -> DP.Process ()
 trySendKeepAlive manager =
-  do empty <- liftIO $ fmap S.null $ readIORef (keepAliveReceivers manager)
+  do empty <- liftIO $ fmap M.null $ readIORef (keepAliveReceivers manager)
      unless empty $ 
        do utc <- liftIO getCurrentTime
           trySendKeepAliveUTC manager utc
@@ -80,7 +113,7 @@ trySendKeepAlive manager =
 -- | Try to send a keep-alive message by the specified current time.
 trySendKeepAliveUTC :: KeepAliveManager -> UTCTime -> DP.Process ()
 trySendKeepAliveUTC manager utc =
-  do empty <- liftIO $ fmap S.null $ readIORef (keepAliveReceivers manager)
+  do empty <- liftIO $ fmap M.null $ readIORef (keepAliveReceivers manager)
      unless empty $ 
        do f <- liftIO $ shouldSendKeepAlive manager utc
           when f $
@@ -89,9 +122,10 @@ trySendKeepAliveUTC manager utc =
                  "Sending a keep-alive message"
                ---
                liftIO $ writeIORef (keepAliveTimestamp manager) utc
-               pids <- liftIO $ readIORef (keepAliveReceivers manager)
-               forM_ pids $ \pid ->
-                 DP.send pid KeepAliveMessage
+               rs <- liftIO $ readIORef (keepAliveReceivers manager)
+               forM_ rs $ \r ->
+                 let pid = keepAliveReceiverProcess r
+                 in DP.send pid KeepAliveMessage
 
 -- | Whether should send a keep-alive message.
 shouldSendKeepAlive :: KeepAliveManager -> UTCTime -> IO Bool

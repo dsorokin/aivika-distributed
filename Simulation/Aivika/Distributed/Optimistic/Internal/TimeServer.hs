@@ -299,13 +299,26 @@ processTimeServerMessage server (ProvideTimeServerStateMessage pid) =
      DP.send pid msg
 processTimeServerMessage server (ReMonitorTimeServerMessage pids) =
   do forM_ pids $ \pid ->
-       do ---
-          logTimeServer server NOTICE $ "Time Server: re-monitoring " ++ show pid
-          ---
-          DP.monitor pid
-          ---
-          logTimeServer server NOTICE $ "Time Server: started re-monitoring " ++ show pid
-          ---
+       do m <- liftIO $ readIORef (tsProcesses server)
+          case M.lookup pid m of
+            Nothing ->
+              logTimeServer server WARNING $
+              "Time Server: unknown process identifier " ++ show pid
+            Just x  ->
+              case lpMonitorRef x of
+                Nothing ->
+                  logTimeServer server WARNING $
+                  "Time Server: there is no monitor reference to " ++ show pid
+                Just r  ->
+                  do logTimeServer server INFO $
+                       "Time Server: re-monitoring the process by identifier " ++ show pid
+                     r' <- DP.monitor pid
+                     DP.unmonitor r
+                     liftIO $
+                       modifyIORef (tsProcesses server) $
+                       M.update (\x -> Just x { lpMonitorRef = Just r' }) pid
+                     logTimeServer server NOTICE $
+                       "Time Server: started re-monitoring " ++ show pid
      resetComputingTimeServerGlobalTime server
 
 -- | Whether the both values are defined and the first is greater than or equaled to the second.

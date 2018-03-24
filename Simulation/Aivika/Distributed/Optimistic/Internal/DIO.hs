@@ -379,17 +379,12 @@ runDIOWithEnv m ps env serverId =
                     SendTerminateTimeServerMessage receiver sender ->
                       DP.send receiver (TerminateTimeServerMessage sender)
                     MonitorProcessMessage pid ->
-                      do ---
-                         logProcess ps INFO $ "Monitoring process " ++ show pid
-                         ---
-                         f <- liftIO $
+                      do f <- liftIO $
                               existsKeepAliveReceiver keepAliveManager pid
                          unless f $
-                           do DP.monitor pid
-                              liftIO $
-                                addKeepAliveReceiver keepAliveManager pid
+                           addKeepAliveReceiver keepAliveManager pid
                     ReMonitorProcessMessage pids ->
-                      handleReMonitorProcessMessage pids ps ch
+                      handleReMonitorProcessMessage pids ps ch keepAliveManager
                     TrySendKeepAliveMessage ->
                       trySendKeepAlive keepAliveManager
                     RegisterLogicalProcessAcknowledgementMessage pid ->
@@ -540,13 +535,10 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
           return ()
 
 -- | Re-monitor the specified remote processes.
-handleReMonitorProcessMessage :: [DP.ProcessId] -> DIOParams -> Channel LogicalProcessMessage -> DP.Process ()
-handleReMonitorProcessMessage pids ps ch =
+handleReMonitorProcessMessage :: [DP.ProcessId] -> DIOParams -> Channel LogicalProcessMessage -> KeepAliveManager -> DP.Process ()
+handleReMonitorProcessMessage pids ps ch keepAliveManager =
   forM_ pids $ \pid ->
-  do ---
-     logProcess ps NOTICE $ "Re-monitoring " ++ show pid
-     ---
-     DP.monitor pid
+  do remonitorKeepAliveReceiver keepAliveManager pid
      ---
      logProcess ps NOTICE $ "Writing to the channel about reconnecting to " ++ show pid
      ---
