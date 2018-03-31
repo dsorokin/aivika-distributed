@@ -1,4 +1,9 @@
 
+Version 1.3
+-----
+
+* Updated the implementation of the fault-tolerant mode.
+
 Version 1.2
 -----
 
