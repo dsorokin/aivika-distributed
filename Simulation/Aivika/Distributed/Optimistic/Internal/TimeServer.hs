@@ -40,6 +40,7 @@ import qualified Control.Distributed.Process as DP
 
 import Simulation.Aivika.Distributed.Optimistic.Internal.Priority
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
+import Simulation.Aivika.Distributed.Optimistic.Internal.ConnectionManager
 import Simulation.Aivika.Distributed.Optimistic.State
 
 -- | The time server parameters.
@@ -115,8 +116,10 @@ data TimeServer =
                -- ^ the global time of the model
                tsGlobalTimeTimestamp :: IORef (Maybe UTCTime),
                -- ^ the global time timestamp
-               tsLogicalProcessValidationTimestamp :: IORef UTCTime
+               tsLogicalProcessValidationTimestamp :: IORef UTCTime,
                -- ^ the logical process validation timestamp
+               tsConnectionManager :: ConnectionManager
+               -- ^ the connection manager
              }
 
 -- | The information about the logical process.
@@ -125,10 +128,8 @@ data LogicalProcessInfo =
                        -- ^ the logical process identifier
                        lpLocalTime :: IORef (Maybe Double),
                        -- ^ the local time of the process
-                       lpTimestamp :: IORef UTCTime,
+                       lpTimestamp :: IORef UTCTime
                        -- ^ the logical process timestamp
-                       lpMonitorRef :: Maybe DP.MonitorRef
-                       -- ^ the logical process monitor reference
                      }
 
 -- | The default time server parameters.
@@ -164,6 +165,11 @@ newTimeServer n ps =
      t0 <- newIORef Nothing
      t' <- newIORef Nothing
      t2 <- getCurrentTime >>= newIORef
+     connManager <- newConnectionManager $
+                    ConnectionParams { connLoggingPriority = tsLoggingPriority ps,
+                                       connKeepAliveInterval = 0, -- not used
+                                       connReconnectingDelay = tsProcessReconnectingDelay ps,
+                                       connMonitoringDelay = tsProcessMonitoringDelay ps }
      return TimeServer { tsParams = ps,
                          tsInitQuorum = n,
                          tsInInit = f,
@@ -173,7 +179,8 @@ newTimeServer n ps =
                          tsProcessesInFind = s,
                          tsGlobalTime = t0,
                          tsGlobalTimeTimestamp = t',
-                         tsLogicalProcessValidationTimestamp = t2
+                         tsLogicalProcessValidationTimestamp = t2,
+                         tsConnectionManager = connManager
                        }
 
 -- | Process the time server message.
@@ -190,15 +197,11 @@ processTimeServerMessage server (RegisterLogicalProcessMessage pid) =
          do t <- newIORef Nothing
             utc <- getCurrentTime >>= newIORef
             modifyIORef (tsProcesses server) $
-              M.insert pid LogicalProcessInfo { lpId = pid, lpLocalTime = t, lpTimestamp = utc, lpMonitorRef = Nothing }
+              M.insert pid LogicalProcessInfo { lpId = pid, lpLocalTime = t, lpTimestamp = utc }
             return $
               do when (tsProcessMonitoringEnabled $ tsParams server) $
-                   do logTimeServer server INFO $
-                        "Time Server: monitoring the process by identifier " ++ show pid
-                      r <- DP.monitor pid
-                      liftIO $
-                        modifyIORef (tsProcesses server) $
-                        M.update (\x -> Just x { lpMonitorRef = Just r }) pid
+                   do tryAddMessageReceiver (tsConnectionManager server) pid
+                      return ()
                  serverId <- DP.getSelfPid
                  DP.send pid (RegisterLogicalProcessAcknowledgementMessage serverId)
                  tryStartTimeServer server
@@ -217,12 +220,7 @@ processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
               S.delete pid
             return $
               do when (tsProcessMonitoringEnabled $ tsParams server) $
-                   case lpMonitorRef x of
-                     Nothing -> return ()
-                     Just r  ->
-                       do logTimeServer server INFO $
-                            "Time Server: unmonitoring the process by identifier " ++ show pid
-                          DP.unmonitor r
+                   removeMessageReceiver (tsConnectionManager server) pid
                  serverId <- DP.getSelfPid
                  DP.send pid (UnregisterLogicalProcessAcknowledgementMessage serverId)
                  tryProvideTimeServerGlobalTime server
@@ -242,12 +240,7 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
               S.delete pid
             return $
               do when (tsProcessMonitoringEnabled $ tsParams server) $
-                   case lpMonitorRef x of
-                     Nothing -> return ()
-                     Just r  ->
-                       do logTimeServer server INFO $
-                            "Time Server: unmonitoring the process by identifier " ++ show pid
-                          DP.unmonitor r
+                   removeMessageReceiver (tsConnectionManager server) pid
                  serverId <- DP.getSelfPid
                  DP.send pid (TerminateTimeServerAcknowledgementMessage serverId)
                  startTerminatingTimeServer server
@@ -297,29 +290,6 @@ processTimeServerMessage server (ProvideTimeServerStateMessage pid) =
                                  tsStateGlobalVirtualTime = t,
                                  tsStateLogicalProcesses = M.keys m }
      DP.send pid msg
-processTimeServerMessage server (ReMonitorTimeServerMessage pids) =
-  do forM_ pids $ \pid ->
-       do m <- liftIO $ readIORef (tsProcesses server)
-          case M.lookup pid m of
-            Nothing ->
-              logTimeServer server WARNING $
-              "Time Server: unknown process identifier " ++ show pid
-            Just x  ->
-              case lpMonitorRef x of
-                Nothing ->
-                  logTimeServer server WARNING $
-                  "Time Server: there is no monitor reference to " ++ show pid
-                Just r  ->
-                  do logTimeServer server INFO $
-                       "Time Server: re-monitoring the process by identifier " ++ show pid
-                     r' <- DP.monitor pid
-                     DP.unmonitor r
-                     liftIO $
-                       modifyIORef (tsProcesses server) $
-                       M.update (\x -> Just x { lpMonitorRef = Just r' }) pid
-                     logTimeServer server NOTICE $
-                       "Time Server: started re-monitoring " ++ show pid
-     resetComputingTimeServerGlobalTime server
 
 -- | Whether the both values are defined and the first is greater than or equaled to the second.
 (.>=.) :: Maybe Double -> Maybe Double -> Bool
@@ -488,8 +458,8 @@ data InternalTimeServerMessage = InternalTimeServerMessage TimeServerMessage
                                  -- ^ the time server message
                                | InternalProcessMonitorNotification DP.ProcessMonitorNotification
                                  -- ^ the process monitor notification
-                               | InternalKeepAliveMessage KeepAliveMessage
-                                 -- ^ the keep alive message
+                               | InternalGeneralMessage GeneralMessage
+                                 -- ^ the general message
 
 -- | Handle the time server exception
 handleTimeServerException :: TimeServer -> SomeException -> DP.Process ()
@@ -509,14 +479,15 @@ timeServer n ps = timeServerWithEnv n ps defaultTimeServerEnv
 timeServerWithEnv :: Int -> TimeServerParams -> TimeServerEnv -> DP.Process ()
 timeServerWithEnv n ps env =
   do server <- liftIO $ newTimeServer n ps
+     serverId <- DP.getSelfPid
      logTimeServer server INFO "Time Server: starting..."
      let loop utc0 =
            do let f1 :: TimeServerMessage -> DP.Process InternalTimeServerMessage
                   f1 x = return (InternalTimeServerMessage x)
                   f2 :: DP.ProcessMonitorNotification -> DP.Process InternalTimeServerMessage
                   f2 x = return (InternalProcessMonitorNotification x)
-                  f3 :: KeepAliveMessage -> DP.Process InternalTimeServerMessage
-                  f3 x = return (InternalKeepAliveMessage x)
+                  f3 :: GeneralMessage -> DP.Process InternalTimeServerMessage
+                  f3 x = return (InternalGeneralMessage x)
               a <- DP.receiveTimeout (tsReceiveTimeout ps) [DP.match f1, DP.match f2, DP.match f3]
               case a of
                 Nothing -> return ()
@@ -528,12 +499,8 @@ timeServerWithEnv n ps env =
                      processTimeServerMessage server m
                 Just (InternalProcessMonitorNotification m) ->
                   handleProcessMonitorNotification m server
-                Just (InternalKeepAliveMessage m) ->
-                  do ---
-                     logTimeServer server DEBUG $
-                       "Time Server: " ++ show m
-                     ---
-                     return ()
+                Just (InternalGeneralMessage m) ->
+                  handleGeneralMessage m server
               utc <- liftIO getCurrentTime
               validation <- liftIO $ readIORef (tsLogicalProcessValidationTimestamp server)
               timestamp <- liftIO $ readIORef (tsGlobalTimeTimestamp server)
@@ -555,8 +522,7 @@ timeServerWithEnv n ps env =
      case tsSimulationMonitoringAction env of
        Nothing  -> return ()
        Just act ->
-         do serverId  <- DP.getSelfPid
-            monitorId <-
+         do monitorId <-
               DP.spawnLocal $
               let loop =
                     do f <- liftIO $ readIORef (tsTerminated server)
@@ -594,33 +560,27 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
        do liftIO $
             threadDelay (tsProcessReconnectingDelay ps)
           let pred m@(DP.ProcessMonitorNotification _ _ reason) = reason == DP.DiedDisconnect
-              loop :: [DP.ProcessId] -> DP.Process [DP.ProcessId]
+              loop :: [DP.ProcessMonitorNotification] -> DP.Process [DP.ProcessMonitorNotification]
               loop acc =
                 do y <- DP.receiveTimeout 0 [DP.matchIf pred recv]
                    case y of
                      Nothing -> return $ reverse acc
-                     Just m@(DP.ProcessMonitorNotification _ pid _) -> loop (pid : acc)
-          pids <- loop [pid0] >>= (liftIO . filterLogicalProcesses server)
-          ---
-          logTimeServer server NOTICE "Begin reconnecting..."
-          ---
-          forM_ pids $ \pid ->
-            do ---
-               logTimeServer server NOTICE $
-                 "Time Server: reconnecting to " ++ show pid
-               ---
-               DP.reconnect pid
-          serverId <- DP.getSelfPid
-          DP.spawnLocal $
-            let action =
-                  do liftIO $
-                       threadDelay (tsProcessMonitoringDelay ps)
-                     ---
-                     logTimeServer server NOTICE $ "Time Server: proceed to the re-monitoring"
-                     ---
-                     DP.send serverId (ReMonitorTimeServerMessage pids)
-            in C.catch action (handleTimeServerException server)
-          return ()
+                     Just m@(DP.ProcessMonitorNotification _ _ _) -> loop (m : acc)
+          ms <- loop [m]
+          pids <- filterMessageReceivers (tsConnectionManager server) ms >>=
+                  (liftIO . filterLogicalProcesses server)
+          reconnectMessageReceivers (tsConnectionManager server) pids
+          resetComputingTimeServerGlobalTime server
+          tryComputeTimeServerGlobalTime server
+
+-- | Handle the general message.
+handleGeneralMessage :: GeneralMessage -> TimeServer -> DP.Process ()
+handleGeneralMessage m@KeepAliveMessage server =
+  do ---
+     logTimeServer server DEBUG $
+       "Time Server: " ++ show m
+     ---
+     return ()
 
 -- | Test whether the sychronization delay has been exceeded.
 timeSyncDelayExceeded :: TimeServer -> UTCTime -> UTCTime -> Bool

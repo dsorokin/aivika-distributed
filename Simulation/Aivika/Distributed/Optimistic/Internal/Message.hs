@@ -20,7 +20,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Message
         LogicalProcessMessage(..),
         TimeServerMessage(..),
         InboxProcessMessage(..),
-        KeepAliveMessage(..)) where
+        GeneralMessage(..)) where
 
 import GHC.Generics
 
@@ -148,8 +148,6 @@ data TimeServerMessage = RegisterLogicalProcessMessage DP.ProcessId
                          -- ^ the logical process sent its local minimum time
                        | ProvideTimeServerStateMessage DP.ProcessId
                          -- ^ send the time server monitoring state message
-                       | ReMonitorTimeServerMessage [DP.ProcessId]
-                         -- ^ re-monitor the logical processes by their identifiers
                        deriving (Eq, Show, Typeable, Generic)
 
 instance Binary TimeServerMessage
@@ -157,9 +155,7 @@ instance Binary TimeServerMessage
 -- | The message destined directly for the inbox process.
 data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
                            -- ^ monitor the logical process by its inbox process identifier
-                         | ReMonitorProcessMessage [DP.ProcessId]
-                           -- ^ re-monitor the logical processes by their identifiers
-                         | TrySendKeepAliveMessage
+                         | TrySendProcessKeepAliveMessage
                            -- ^ try to send a keep alive message
                          | SendQueueMessage DP.ProcessId Message
                            -- ^ send a queue message via the inbox process
@@ -191,9 +187,9 @@ data InboxProcessMessage = MonitorProcessMessage DP.ProcessId
 
 instance Binary InboxProcessMessage
 
--- | The keep-alive message type.
-data KeepAliveMessage = KeepAliveMessage
-                        -- ^ the keel-alive message.
-                        deriving (Eq, Show, Typeable, Generic)
+-- | The general message type.
+data GeneralMessage = KeepAliveMessage
+                      -- ^ the keel-alive message.
+                    deriving (Eq, Show, Typeable, Generic)
 
-instance Binary KeepAliveMessage
+instance Binary GeneralMessage

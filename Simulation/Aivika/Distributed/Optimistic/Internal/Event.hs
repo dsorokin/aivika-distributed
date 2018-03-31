@@ -49,6 +49,7 @@ import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.InputMes
 import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
 import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
+import {-# SOURCE #-} Simulation.Aivika.Distributed.Optimistic.Internal.AcknowledgementMessageQueue
 import {-# SOURCE #-} qualified Simulation.Aivika.Distributed.Optimistic.Internal.Ref.Strict as R
 import Simulation.Aivika.Distributed.Optimistic.State
 
@@ -67,6 +68,8 @@ instance EventQueueing DIO where
                  -- ^ the output message queue
                  queueTransientMessages :: TransientMessageQueue,
                  -- ^ the transient message queue
+                 queueAcknowledgementMessages :: AcknowledgementMessageQueue,
+                 -- ^ the acknowledgement message queue
                  queueLog :: UndoableLog,
                  -- ^ the undoable log of operations
                  queuePQ :: R.Ref (PQ.PriorityQueue (Point DIO -> DIO ())),
@@ -92,11 +95,13 @@ instance EventQueueing DIO where
        transient <- newTransientMessageQueue
        output <- newOutputMessageQueue $ enqueueTransientMessage transient
        input <- newInputMessageQueue log rollbackEventPre rollbackEventPost rollbackEventTime
+       ack <- newAcknowledgementMessageQueue
        infind <- liftIOUnsafe $ newIORef False
        s <- newDIOSignalSource0
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueTransientMessages = transient,
+                           queueAcknowledgementMessages = ack,
                            queueLog  = log,
                            queuePQ   = pq,
                            queueBusy = f,
@@ -362,8 +367,13 @@ processChannelMessage x@(QueueMessage m) =
                if f
                  then invokeEvent p' logOutdatedMessage
                  else error "Received the outdated message: processChannelMessage"
-       else invokeTimeWarp p' $
-            enqueueMessage (queueInputMessages q) m
+       else do ps <- dioParams
+               when (dioProcessReconnectingEnabled ps) $
+                 liftIOUnsafe $
+                 enqueueAcknowledgementMessage (queueAcknowledgementMessages q) $
+                 acknowledgementMessage infind m
+               invokeTimeWarp p' $
+                 enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(QueueMessageBulk ms) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -381,8 +391,13 @@ processChannelMessage x@(QueueMessageBulk ms) =
                     if f
                       then invokeEvent p' logOutdatedMessage
                       else error "Received the outdated message: processChannelMessage"
-            else invokeTimeWarp p' $
-                 enqueueMessage (queueInputMessages q) m
+            else do ps <- dioParams
+                    when (dioProcessReconnectingEnabled ps) $
+                      liftIOUnsafe $
+                      enqueueAcknowledgementMessage (queueAcknowledgementMessages q) $
+                      acknowledgementMessage infind m
+                    invokeTimeWarp p' $
+                      enqueueMessage (queueInputMessages q) m
 processChannelMessage x@(AcknowledgementQueueMessage m) =
   TimeWarp $ \p ->
   do let q = runEventQueue $ pointRun p
@@ -600,10 +615,13 @@ reduceEvents :: Double -> Event DIO ()
 reduceEvents t =
   Event $ \p ->
   do let q = runEventQueue $ pointRun p
+     ps <- dioParams 
      liftIOUnsafe $
        do reduceInputMessages (queueInputMessages q) t
           reduceOutputMessages (queueOutputMessages q) t
           reduceLog (queueLog q) t
+          when (dioProcessReconnectingEnabled ps) $
+            reduceAcknowledgementMessages (queueAcknowledgementMessages q) t
 
 instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
 
@@ -775,11 +793,9 @@ reconnectProcess pid =
        "t = " ++ show (pointTime p) ++
        ": reconnecting to " ++ show pid ++ "..."
      ---
-     infind <- liftIOUnsafe $ readIORef (queueInFind q)
-     let ys = queueInputMessages q
+     let ys = queueAcknowledgementMessages q
      ys' <- liftIOUnsafe $
-            fmap (map $ acknowledgementMessage infind) $
-            filterInputMessages (\x -> messageSenderId x == pid) ys
+            filterAcknowledgementMessages (\x -> acknowledgementSenderId x == pid) ys
      unless (null ys') $
        sendAcknowledgementMessagesDIO pid ys'
      xs <- liftIOUnsafe $ transientMessages (queueTransientMessages q)
