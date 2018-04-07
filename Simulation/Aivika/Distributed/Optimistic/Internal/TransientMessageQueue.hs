@@ -25,6 +25,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
 import qualified Data.Map as M
 import Data.List
 import Data.IORef
+import Data.Word
 
 import Control.Monad
 import Control.Monad.Trans
@@ -44,7 +45,7 @@ data TransientMessageQueue =
 
 -- | Represents an acknowledgement message representative.
 data TransientMessageQueueItem =
-  TransientMessageQueueItem { itemSequenceNo :: Int,
+  TransientMessageQueueItem { itemSequenceNo :: Word64,
                               -- ^ The sequence number.
                               itemSendTime :: Double,
                               -- ^ The send time.

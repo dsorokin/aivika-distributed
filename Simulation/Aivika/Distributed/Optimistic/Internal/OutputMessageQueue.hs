@@ -20,6 +20,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.OutputMessageQueue
 
 import Data.List
 import Data.IORef
+import Data.Word
 
 import Control.Monad
 import Control.Monad.Trans
@@ -42,7 +43,7 @@ data OutputMessageQueue =
                        -- ^ Enqueue the transient message.
                        outputMessages :: DLL.DoubleLinkedList Message,
                        -- ^ The output messages.
-                       outputMessageSequenceNo :: IORef Int
+                       outputMessageSequenceNo :: IORef Word64
                        -- ^ The next sequence number.
                      }
 
@@ -114,7 +115,7 @@ reduceOutputMessages q t = loop
                    loop
 
 -- | Generate a next message sequence number.
-generateMessageSequenceNo :: OutputMessageQueue -> IO Int
+generateMessageSequenceNo :: OutputMessageQueue -> IO Word64
 generateMessageSequenceNo q =
   atomicModifyIORef (outputMessageSequenceNo q) $ \n ->
   let n' = n + 1 in n' `seq` (n', n)

@@ -26,6 +26,7 @@ import GHC.Generics
 
 import Data.Typeable
 import Data.Binary
+import Data.Word
 
 import qualified Control.Distributed.Process as DP
 import Control.Distributed.Process.Serializable
@@ -34,7 +35,7 @@ import Simulation.Aivika.Distributed.Optimistic.State
 
 -- | Represents a message.
 data Message =
-  Message { messageSequenceNo :: Int,
+  Message { messageSequenceNo :: Word64,
             -- ^ The sequence number.
             messageSendTime :: Double,
             -- ^ The send time.
@@ -78,7 +79,7 @@ instance Eq Message where
 
 -- | Represents an acknowledgement message.
 data AcknowledgementMessage =
-  AcknowledgementMessage { acknowledgementSequenceNo :: Int,
+  AcknowledgementMessage { acknowledgementSequenceNo :: Word64,
                            -- ^ The sequence number.
                            acknowledgementSendTime :: Double,
                            -- ^ The send time.
