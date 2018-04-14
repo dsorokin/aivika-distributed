@@ -64,6 +64,8 @@ data ConnectionManager =
 data ConnectionMessageReceiver =
   ConnectionMessageReceiver { connReceiverProcess :: DP.ProcessId,
                               -- ^ the receiver of messages
+                              connReceiverNodeMonitor :: IORef (Maybe DP.MonitorRef),
+                              -- ^ a monitor of the message receiver node
                               connReceiverMonitor :: IORef (Maybe DP.MonitorRef)
                               -- ^ a monitor of the message receiver
                             }
@@ -90,13 +92,12 @@ tryAddMessageReceiver manager pid =
 -- | Add the connection message receiver.
 addMessageReceiver :: ConnectionManager -> DP.ProcessId -> DP.Process ()
 addMessageReceiver manager pid =
-  do ---
-     logConnectionManager manager INFO $ "Monitoring " ++ show pid
-     ---
-     r  <- DP.monitor pid
-     r2 <- liftIO $ newIORef (Just r)
+  do r1 <- liftIO $ newIORef Nothing
+     r2 <- liftIO $ newIORef Nothing
      let x = ConnectionMessageReceiver { connReceiverProcess = pid,
+                                         connReceiverNodeMonitor = r1,
                                          connReceiverMonitor = r2 }
+     monitorMessageReceiver manager x
      liftIO $
        modifyIORef (connReceivers manager) $
        M.insert pid x
@@ -109,14 +110,7 @@ removeMessageReceiver manager pid =
        Nothing ->
          logConnectionManager manager WARNING $ "Could not find the monitored process " ++ show pid
        Just r  ->
-         do ---
-            logConnectionManager manager INFO $ "Unmonitoring " ++ show pid
-            ---
-            ref <- liftIO $ readIORef (connReceiverMonitor r)
-            case ref of
-              Just m  -> DP.unmonitor m
-              Nothing ->
-                logConnectionManager manager WARNING $ "Could not find the monitor reference for process " ++ show pid
+         do unmonitorMessageReceiver manager r
             liftIO $
               modifyIORef (connReceivers manager) $
               M.delete pid
@@ -142,31 +136,72 @@ reconnectMessageReceivers manager pids =
 -- | Unmonitor the message receiver.
 unmonitorMessageReceiver :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
 unmonitorMessageReceiver manager r =
+  do unmonitorMessageReceiverProcess manager r
+     unmonitorMessageReceiverNode manager r
+
+-- | Monitor the message receiver.
+monitorMessageReceiver :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
+monitorMessageReceiver manager r =
+  do monitorMessageReceiverNode manager r
+     monitorMessageReceiverProcess manager r
+
+-- | Unmonitor the message receiver process.
+unmonitorMessageReceiverProcess :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
+unmonitorMessageReceiverProcess manager r =
   do let pid = connReceiverProcess r
      ref <- liftIO $ readIORef (connReceiverMonitor r)
      case ref of
        Just m  ->
-         do logConnectionManager manager NOTICE $ "Unmonitoring " ++ show pid
+         do logConnectionManager manager NOTICE $ "Unmonitoring process " ++ show pid
             DP.unmonitor m
             liftIO $ writeIORef (connReceiverMonitor r) Nothing
        Nothing ->
          logConnectionManager manager WARNING $ "Could not find the monitor reference for process " ++ show pid
 
--- | Monitor the message receiver.
-monitorMessageReceiver :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
-monitorMessageReceiver manager r =
+-- | Monitor the message receiver process.
+monitorMessageReceiverProcess :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
+monitorMessageReceiverProcess manager r =
   do let pid = connReceiverProcess r
      ref <- liftIO $ readIORef (connReceiverMonitor r)
      case ref of
        Nothing ->
-         do logConnectionManager manager NOTICE $ "Monitoring " ++ show pid
+         do logConnectionManager manager NOTICE $ "Monitoring process " ++ show pid
             x <- DP.monitor pid
             liftIO $ writeIORef (connReceiverMonitor r) (Just x)
        Just x0 ->
-         do logConnectionManager manager WARNING $ "Re-monitoring " ++ show pid
+         do logConnectionManager manager WARNING $ "Re-monitoring process " ++ show pid
             x <- DP.monitor pid
             DP.unmonitor x0
             liftIO $ writeIORef (connReceiverMonitor r) (Just x)
+
+-- | Unmonitor the message receiver node.
+unmonitorMessageReceiverNode :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
+unmonitorMessageReceiverNode manager r =
+  do let nid = DP.processNodeId $ connReceiverProcess r
+     ref <- liftIO $ readIORef (connReceiverNodeMonitor r)
+     case ref of
+       Just m  ->
+         do logConnectionManager manager NOTICE $ "Unmonitoring node " ++ show nid
+            DP.unmonitor m
+            liftIO $ writeIORef (connReceiverNodeMonitor r) Nothing
+       Nothing ->
+         logConnectionManager manager WARNING $ "Could not find the monitor reference for node " ++ show nid
+
+-- | Monitor the message receiver node.
+monitorMessageReceiverNode :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
+monitorMessageReceiverNode manager r =
+  do let nid = DP.processNodeId $ connReceiverProcess r
+     ref <- liftIO $ readIORef (connReceiverNodeMonitor r)
+     case ref of
+       Nothing ->
+         do logConnectionManager manager NOTICE $ "Monitoring node " ++ show nid
+            x <- DP.monitorNode nid
+            liftIO $ writeIORef (connReceiverNodeMonitor r) (Just x)
+       Just x0 ->
+         do logConnectionManager manager WARNING $ "Re-monitoring node " ++ show nid
+            x <- DP.monitorNode nid
+            DP.unmonitor x0
+            liftIO $ writeIORef (connReceiverNodeMonitor r) (Just x)
 
 -- | Reconnect to the message receiver.
 reconnectToMessageReceiver :: ConnectionManager -> ConnectionMessageReceiver -> DP.Process ()
@@ -204,7 +239,7 @@ trySendKeepAliveUTC manager utc =
                rs <- liftIO $ readIORef (connReceivers manager)
                forM_ rs $ \r ->
                  do let pid = connReceiverProcess r
-                    DP.send pid KeepAliveMessage
+                    DP.usend pid KeepAliveMessage
 
 -- | Whether should send a keep-alive message.
 shouldSendKeepAlive :: ConnectionManager -> UTCTime -> IO Bool

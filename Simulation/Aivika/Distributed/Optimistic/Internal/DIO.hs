@@ -353,7 +353,7 @@ runDIOWithEnv m ps env serverId =
               case x of
                 Nothing -> return ()
                 Just (InternalLogicalProcessMessage m) ->
-                  do processTimeServerMessage m serverId timeServerTimestamp
+                  do processTimeServerMessage m ps serverId timeServerTimestamp
                      liftIO $
                        writeChannel ch m
                 Just (InternalProcessMonitorNotification m@(DP.ProcessMonitorNotification _ _ _)) ->
@@ -361,25 +361,25 @@ runDIOWithEnv m ps env serverId =
                 Just (InternalInboxProcessMessage m) ->
                   case m of
                     SendQueueMessage pid m ->
-                      DP.send pid (QueueMessage m)
+                      DP.usend pid (QueueMessage m)
                     SendQueueMessageBulk pid ms ->
                       forM_ ms $ \m ->
-                      DP.send pid (QueueMessage m)
+                      DP.usend pid (QueueMessage m)
                     SendAcknowledgementQueueMessage pid m ->
-                      DP.send pid (AcknowledgementQueueMessage m)
+                      DP.usend pid (AcknowledgementQueueMessage m)
                     SendAcknowledgementQueueMessageBulk pid ms ->
                       forM_ ms $ \m ->
-                      DP.send pid (AcknowledgementQueueMessage m)
+                      DP.usend pid (AcknowledgementQueueMessage m)
                     SendLocalTimeMessage receiver sender t ->
-                      DP.send receiver (LocalTimeMessage sender t)
+                      DP.usend receiver (LocalTimeMessage sender t)
                     SendRequestGlobalTimeMessage receiver sender ->
-                      DP.send receiver (RequestGlobalTimeMessage sender)
+                      DP.usend receiver (RequestGlobalTimeMessage sender)
                     SendRegisterLogicalProcessMessage receiver sender ->
-                      DP.send receiver (RegisterLogicalProcessMessage sender)
+                      DP.usend receiver (RegisterLogicalProcessMessage sender)
                     SendUnregisterLogicalProcessMessage receiver sender ->
-                      DP.send receiver (UnregisterLogicalProcessMessage sender)
+                      DP.usend receiver (UnregisterLogicalProcessMessage sender)
                     SendTerminateTimeServerMessage receiver sender ->
-                      DP.send receiver (TerminateTimeServerMessage sender)
+                      DP.usend receiver (TerminateTimeServerMessage sender)
                     MonitorProcessMessage pid ->
                       tryAddMessageReceiver connManager pid >> return ()
                     TrySendProcessKeepAliveMessage ->
@@ -549,16 +549,18 @@ monitorProcessDIO pid =
             logProcess ps WARNING "Ignored the process monitoring as it was disabled in the DIO computation parameters"
 
 -- | Process the time server message in a stream of messages destined for the logical process.
-processTimeServerMessage :: LogicalProcessMessage -> DP.ProcessId -> IORef UTCTime -> DP.Process ()
-processTimeServerMessage ComputeLocalTimeMessage serverId r =
+processTimeServerMessage :: LogicalProcessMessage -> DIOParams -> DP.ProcessId -> IORef UTCTime -> DP.Process ()
+processTimeServerMessage ComputeLocalTimeMessage ps serverId r =
   do liftIO $
        getCurrentTime >>= writeIORef r
      inboxId <- DP.getSelfPid
-     DP.send serverId (ComputeLocalTimeAcknowledgementMessage inboxId)
-processTimeServerMessage (GlobalTimeMessage _) serverId r =
+     if dioProcessMonitoringEnabled ps
+       then DP.usend serverId (ComputeLocalTimeAcknowledgementMessage inboxId)
+       else DP.send serverId (ComputeLocalTimeAcknowledgementMessage inboxId)
+processTimeServerMessage (GlobalTimeMessage _) ps serverId r =
   liftIO $
   getCurrentTime >>= writeIORef r
-processTimeServerMessage _ serverId r =
+processTimeServerMessage _ ps serverId r =
   return ()
 
 -- | Validate the time server by the specified inbox and recent timestamp.

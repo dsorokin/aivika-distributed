@@ -203,7 +203,9 @@ processTimeServerMessage server (RegisterLogicalProcessMessage pid) =
                    do tryAddMessageReceiver (tsConnectionManager server) pid
                       return ()
                  serverId <- DP.getSelfPid
-                 DP.send pid (RegisterLogicalProcessAcknowledgementMessage serverId)
+                 if tsProcessMonitoringEnabled (tsParams server)
+                   then DP.usend pid (RegisterLogicalProcessAcknowledgementMessage serverId)
+                   else DP.send pid (RegisterLogicalProcessAcknowledgementMessage serverId)
                  tryStartTimeServer server
 processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
   join $ liftIO $
@@ -222,7 +224,9 @@ processTimeServerMessage server (UnregisterLogicalProcessMessage pid) =
               do when (tsProcessMonitoringEnabled $ tsParams server) $
                    removeMessageReceiver (tsConnectionManager server) pid
                  serverId <- DP.getSelfPid
-                 DP.send pid (UnregisterLogicalProcessAcknowledgementMessage serverId)
+                 if tsProcessMonitoringEnabled (tsParams server)
+                   then DP.usend pid (UnregisterLogicalProcessAcknowledgementMessage serverId)
+                   else DP.send pid (UnregisterLogicalProcessAcknowledgementMessage serverId)
                  tryProvideTimeServerGlobalTime server
                  tryTerminateTimeServer server
 processTimeServerMessage server (TerminateTimeServerMessage pid) =
@@ -242,7 +246,9 @@ processTimeServerMessage server (TerminateTimeServerMessage pid) =
               do when (tsProcessMonitoringEnabled $ tsParams server) $
                    removeMessageReceiver (tsConnectionManager server) pid
                  serverId <- DP.getSelfPid
-                 DP.send pid (TerminateTimeServerAcknowledgementMessage serverId)
+                 if tsProcessMonitoringEnabled (tsParams server)
+                   then DP.usend pid (TerminateTimeServerAcknowledgementMessage serverId)
+                   else DP.send pid (TerminateTimeServerAcknowledgementMessage serverId)
                  startTerminatingTimeServer server
 processTimeServerMessage server (RequestGlobalTimeMessage pid) =
   tryComputeTimeServerGlobalTime server
@@ -289,7 +295,9 @@ processTimeServerMessage server (ProvideTimeServerStateMessage pid) =
                                  tsStateName = name,
                                  tsStateGlobalVirtualTime = t,
                                  tsStateLogicalProcesses = M.keys m }
-     DP.send pid msg
+     if tsProcessMonitoringEnabled (tsParams server)
+       then DP.usend pid msg
+       else DP.send pid msg
 
 -- | Whether the both values are defined and the first is greater than or equaled to the second.
 (.>=.) :: Maybe Double -> Maybe Double -> Bool
@@ -370,7 +378,9 @@ computeTimeServerGlobalTime server =
        modifyIORef (tsProcessesInFind server) $
        S.insert pid
      forM_ zs $ \(pid, x) ->
-       DP.send pid ComputeLocalTimeMessage
+       if tsProcessMonitoringEnabled (tsParams server)
+       then DP.usend pid ComputeLocalTimeMessage
+       else DP.send pid ComputeLocalTimeMessage
 
 -- | Provide the logical processes with the global time.
 provideTimeServerGlobalTime :: TimeServer -> DP.Process ()
@@ -390,7 +400,9 @@ provideTimeServerGlobalTime server =
             liftIO $ writeIORef (tsGlobalTimeTimestamp server) (Just timestamp)
             zs <- liftIO $ fmap M.assocs $ readIORef (tsProcesses server)
             forM_ zs $ \(pid, x) ->
-              DP.send pid (GlobalTimeMessage t0)
+              if tsProcessMonitoringEnabled (tsParams server)
+              then DP.usend pid (GlobalTimeMessage t0)
+              else DP.send pid (GlobalTimeMessage t0)
 
 -- | Return the time server global time.
 timeServerGlobalTime :: TimeServer -> IO (Maybe Double)
