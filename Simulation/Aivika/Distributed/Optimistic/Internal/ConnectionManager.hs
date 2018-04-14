@@ -16,6 +16,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.ConnectionManager
         tryAddMessageReceiver,
         addMessageReceiver,
         removeMessageReceiver,
+        clearMessageReceivers,
         reconnectMessageReceivers,
         filterMessageReceivers,
         existsMessageReceiver,
@@ -114,6 +115,14 @@ removeMessageReceiver manager pid =
             liftIO $
               modifyIORef (connReceivers manager) $
               M.delete pid
+
+-- | Clear the connection message receivers.
+clearMessageReceivers :: ConnectionManager -> DP.Process ()
+clearMessageReceivers manager =
+  do rs <- liftIO $ readIORef (connReceivers manager)
+     forM_ (M.elems rs) $ \r ->
+       do let pid = connReceiverProcess r
+          removeMessageReceiver manager pid
 
 -- | Reconnect to the message receivers.
 reconnectMessageReceivers :: ConnectionManager -> [DP.ProcessId] -> DP.Process ()

@@ -417,9 +417,10 @@ runDIOWithEnv m ps env serverId =
                   handleGeneralMessage m ps ch connManager
          loop =
            C.finally loop0
-           (liftIO $
-            do atomicWriteIORef terminated True
-               writeChannel ch AbortSimulationMessage)
+           (do liftIO $
+                 do atomicWriteIORef terminated True
+                    writeChannel ch AbortSimulationMessage
+               clearMessageReceivers connManager)
      inboxId <-
        DP.spawnLocal $
        C.catch loop (handleException ps)

@@ -529,8 +529,9 @@ timeServerWithEnv n ps env =
          loop' utc0 =
            C.finally
            (loop utc0)
-           (liftIO $
-            atomicWriteIORef (tsTerminated server) True)
+           (do liftIO $
+                 atomicWriteIORef (tsTerminated server) True
+               clearMessageReceivers (tsConnectionManager server))
      case tsSimulationMonitoringAction env of
        Nothing  -> return ()
        Just act ->
