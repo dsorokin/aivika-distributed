@@ -81,17 +81,15 @@ data TimeServerEnv =
 
 -- | The time server strategy.
 data TimeServerStrategy = WaitIndefinitelyForLogicalProcess
-                          -- ^ wait for the logical process forever
+                          -- ^ wait for the logical processes forever
                         | TerminateDueToLogicalProcessTimeout Int
                           -- ^ terminate the server due to the exceeded logical process timeout in microseconds,
-                          -- but not less than 'tsTimeSyncTimeout', which is a much more preferable option than
-                          -- significantly more risky 'UnregisterLogicalProcessDueToTimeout'
+                          -- but not less than 'tsTimeSyncTimeout', which should be applied if
+                          -- the process reconnecting is enabled
                         | UnregisterLogicalProcessDueToTimeout Int
                           -- ^ unregister the logical process due to the exceeded timeout in microseconds,
-                          -- but not less than 'tsTimeSyncTimeout', which is a very risky option as there can be
-                          -- un-acknowledged messages by the just unregistered logical process that might shutdown,
-                          -- which would keep the global virtual time on the same value even if the existent
-                          -- logical processes had another local time
+                          -- but not less than 'tsTimeSyncTimeout', which can be applied only if
+                          -- the process disconnecting is enabled
                         deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary TimeServerStrategy
