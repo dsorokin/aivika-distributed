@@ -5,6 +5,9 @@ Version 1.4
 * Added the leaveSimulation function that allows leaving the simulation prematurely.
   It was made in addition to an ability for new logical processes to enter the already 
   running simulation.
+  
+* Added the dioProcessDisconnectingEnabled flag to allow logical processes to disconnect
+  when the monitoring is enabled, but the time server strategy implies unregistering.
 
 Version 1.3
 -----
