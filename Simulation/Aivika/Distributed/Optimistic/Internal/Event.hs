@@ -482,6 +482,15 @@ processChannelMessage x@AbortSimulationMessage =
      invokeEvent p $
        throwEvent $
        SimulationAbort "Aborted by the outer process."
+processChannelMessage x@(DisconnectProcessMessage pid) =
+  TimeWarp $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     --- invokeEvent p $
+     ---   logMessage x
+     ---
+     invokeEvent p $
+       disconnectProcess pid
 
 -- | Return the local minimum time.
 getLocalTime :: Event DIO Double
@@ -952,3 +961,19 @@ leaveSimulation =
        enqueueEventIO t $
        Event $ \p ->
        liftIOUnsafe $ writeIORef (queueIsLeaving q) True
+
+-- | Disconnect to the remote process.
+disconnectProcess :: DP.ProcessId -> Event DIO ()
+disconnectProcess pid =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+     ---
+     logDIO NOTICE $
+       "t = " ++ show (pointTime p) ++
+       ": disconnecting from " ++ show pid ++ "..."
+     ---
+     ps <- dioParams
+     when (dioProcessReconnectingEnabled ps) $
+       error "The logical process cannot be in the reconnecting state: disconnectProcess"
+     liftIOUnsafe $
+       dequeueTransientMessages (queueTransientMessages q) pid

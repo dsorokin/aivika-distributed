@@ -130,6 +130,8 @@ data LogicalProcessMessage = QueueMessage Message
                              -- ^ provide the logical process state
                            | AbortSimulationMessage
                              -- ^ abort the simulation
+                           | DisconnectProcessMessage DP.ProcessId
+                             -- ^ the specified process has been disconnected
                            deriving (Show, Typeable, Generic)
 
 instance Binary LogicalProcessMessage

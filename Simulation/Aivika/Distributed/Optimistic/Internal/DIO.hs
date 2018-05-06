@@ -92,7 +92,7 @@ data DIOParams =
               dioProcessMonitoringDelay :: Int,
               -- ^ The delay in microseconds which must be applied for monitoring every remote process.
               dioProcessReconnectingEnabled :: Bool,
-              -- ^ Whether the automatic reconnecting to processes is enabled when enabled monitoring
+              -- ^ Whether the automatic reconnecting to processes is enabled when enabled monitoring (if 'dioProcessMonitoringEnabled' is 'True')
               dioProcessReconnectingDelay :: Int,
               -- ^ The delay in microseconds before reconnecting to the remote process
               dioKeepAliveInterval :: Int,
@@ -103,8 +103,10 @@ data DIOParams =
               -- ^ The interval in microseconds between sending the simulation monitoring messages
               dioSimulationMonitoringTimeout :: Int,
               -- ^ The timeout in microseconds when processing the monitoring messages
-              dioStrategy :: DIOStrategy
+              dioStrategy :: DIOStrategy,
               -- ^ The logical process strategy
+              dioProcessDisconnectingEnabled :: Bool
+              -- ^ Whether the process disconnecting is enabled (only if the 'dioProcessReconnectingEnabled' is 'False')
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
@@ -210,7 +212,8 @@ defaultDIOParams =
               dioTimeServerAcknowledgementTimeout = 5000000,
               dioSimulationMonitoringInterval = 30000000,
               dioSimulationMonitoringTimeout = 100000,
-              dioStrategy = TerminateDueToTimeServerTimeout 300000000
+              dioStrategy = TerminateDueToTimeServerTimeout 300000000,
+              dioProcessDisconnectingEnabled = False
             }
 
 -- | The default environment parameters for the 'DIO' computation
@@ -523,6 +526,9 @@ handleProcessMonitorNotification m@(DP.ProcessMonitorNotification _ pid0 reason)
                ---
                liftIO $
                  writeChannel ch (ReconnectProcessMessage pid)
+     when (dioProcessDisconnectingEnabled ps && not (dioProcessReconnectingEnabled ps)) $
+       liftIO $
+       writeChannel ch (DisconnectProcessMessage pid0)
 
 -- | Handle the general message.
 handleGeneralMessage :: GeneralMessage

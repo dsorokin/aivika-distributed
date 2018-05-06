@@ -20,7 +20,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.TransientMessageQueue
         acknowledgementMessageTime,
         resetAcknowledgementMessageTime,
         deliverAcknowledgementMessage,
-        deliverAcknowledgementMessages) where
+        deliverAcknowledgementMessages,
+        dequeueTransientMessages) where
 
 import qualified Data.Map as M
 import Data.List
@@ -170,3 +171,9 @@ deliverAcknowledgementMessages xs =
       dlv zs@(z : _) =
         sendAcknowledgementMessagesDIO (acknowledgementSenderId z) zs
   in forM_ ys dlv
+
+-- | Dequeue the transient messages associated with the specified logical process.
+dequeueTransientMessages :: TransientMessageQueue -> DP.ProcessId -> IO ()
+dequeueTransientMessages q pid =
+  modifyIORef (queueTransientMessages q) $
+  M.filter (\m -> messageReceiverId m /= pid)
