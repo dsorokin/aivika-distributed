@@ -16,7 +16,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Event
         queueOutputMessages,
         queueLog,
         expectEvent,
-        processMonitorSignal) where
+        processMonitorSignal,
+        leaveSimulation) where
 
 import Data.Maybe
 import Data.IORef
@@ -82,8 +83,10 @@ instance EventQueueing DIO where
                  -- ^ the global time
                  queueInFind :: IORef Bool,
                  -- ^ whether the queue is in find mode
-                 queueProcessMonitorNotificationSource :: SignalSource DIO DP.ProcessMonitorNotification
+                 queueProcessMonitorNotificationSource :: SignalSource DIO DP.ProcessMonitorNotification,
                  -- ^ the source of process monitor notifications
+                 queueIsLeaving :: IORef Bool
+                 -- ^ whether the logical process tries to leave the simulation
                }
 
   newEventQueue specs =
@@ -98,6 +101,7 @@ instance EventQueueing DIO where
        ack <- newAcknowledgementMessageQueue
        infind <- liftIOUnsafe $ newIORef False
        s <- newDIOSignalSource0
+       leaving <- liftIOUnsafe $ newIORef False
        return EventQueue { queueInputMessages = input,
                            queueOutputMessages = output,
                            queueTransientMessages = transient,
@@ -108,7 +112,8 @@ instance EventQueueing DIO where
                            queueTime = t,
                            queueGlobalTime = gt,
                            queueInFind = infind,
-                           queueProcessMonitorNotificationSource = s }
+                           queueProcessMonitorNotificationSource = s,
+                           queueIsLeaving = leaving }
 
   enqueueEvent t (Event m) =
     Event $ \p ->
@@ -499,6 +504,17 @@ getLocalTime =
      ---
      return t'
 
+-- | Test whether the local time is ending.
+isLocalTimeEnding :: Event DIO Bool
+isLocalTimeEnding =
+  Event $ \p ->
+  do let q  = runEventQueue $ pointRun p
+         t0 = spcStopTime $ pointSpecs p 
+     t1 <- liftIOUnsafe $ readIORef (queueTime q)
+     t2 <- liftIOUnsafe $ transientMessageQueueTime (queueTransientMessages q)
+     t3 <- liftIOUnsafe $ acknowledgementMessageTime (queueTransientMessages q)
+     return $ (t1 == t0) && (t2 > t0) && (t3 > t0)
+
 -- | Update the global time.
 updateGlobalTime :: Double -> Event DIO ()
 updateGlobalTime t =
@@ -647,58 +663,62 @@ instance {-# OVERLAPPING #-} MonadIO (Event DIO) where
 syncLocalTime :: Dynamics DIO () -> TimeWarp DIO ()
 syncLocalTime m =
   TimeWarp $ \p ->
-  do let q = runEventQueue $ pointRun p
-         t = pointTime p
-     invokeDynamics p m
-     t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
-     if t' > t
-       then error "Inconsistent time: syncLocalTime"
-       else if (t == spcStartTime (pointSpecs p)) || (t' == pointTime p)
-            then return ()
-            else do ---
-                    --- invokeEvent p logSyncLocalTime
-                    ---
-                    ch <- messageChannel
-                    dt <- fmap dioSyncTimeout dioParams
-                    f  <- liftIOUnsafe $
-                          timeout dt $ awaitChannel ch
-                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
-                    if ok
-                      then do case f of
-                                Just _  ->
-                                  invokeTimeWarp p $ syncLocalTime m
-                                Nothing ->
-                                  do -- invokeEvent p requestGlobalTime
-                                     invokeTimeWarp p $ syncLocalTime0 m
-                      else return ()
+  do invokeDynamics p m
+     f <- invokeEvent p isLocalTimeSynchronized
+     unless f $
+       do ---
+          --- invokeEvent p logSyncLocalTime
+          ---
+          ch <- messageChannel
+          dt <- fmap dioSyncTimeout dioParams
+          f  <- liftIOUnsafe $
+                timeout dt $ awaitChannel ch
+          ok <- invokeEvent p $ runTimeWarp processChannelMessages
+          when ok $
+            case f of
+              Just _  ->
+                invokeTimeWarp p $ syncLocalTime m
+              Nothing ->
+                do -- invokeEvent p requestGlobalTime
+                   invokeTimeWarp p $ syncLocalTime0 m
   
 -- | Synchronize the local time executing the specified computation in ring 0.
 syncLocalTime0 :: Dynamics DIO () -> TimeWarp DIO ()
 syncLocalTime0 m =
   TimeWarp $ \p ->
+  do invokeDynamics p m
+     f <- invokeEvent p isLocalTimeSynchronized
+     unless f $
+       do ---
+          --- invokeEvent p logSyncLocalTime0
+          ---
+          ch <- messageChannel
+          dt <- fmap dioSyncTimeout dioParams
+          f  <- liftIOUnsafe $
+                timeout dt $ awaitChannel ch
+          ok <- invokeEvent p $ runTimeWarp processChannelMessages
+          when ok $
+            case f of
+              Just _  ->
+                invokeTimeWarp p $ syncLocalTime m
+              Nothing ->
+                error "Exceeded the timeout when synchronizing the local time: syncLocalTime0"
+
+-- | Test whether the local time is synchronized.
+isLocalTimeSynchronized :: Event DIO Bool
+isLocalTimeSynchronized =
+  Event $ \p ->
   do let q = runEventQueue $ pointRun p
          t = pointTime p
-     invokeDynamics p m
      t' <- liftIOUnsafe $ readIORef (queueGlobalTime q)
      if t' > t
-       then error "Inconsistent time: syncLocalTime0"
-       else if t' == pointTime p
-            then return ()
-            else do ---
-                    --- invokeEvent p logSyncLocalTime0
-                    ---
-                    ch <- messageChannel
-                    dt <- fmap dioSyncTimeout dioParams
-                    f  <- liftIOUnsafe $
-                          timeout dt $ awaitChannel ch
-                    ok <- invokeEvent p $ runTimeWarp processChannelMessages
-                    if ok
-                      then do case f of
-                                Just _  ->
-                                  invokeTimeWarp p $ syncLocalTime m
-                                Nothing ->
-                                  error "Exceeded the timeout when synchronizing the local time: syncLocalTime0"
-                      else return ()
+       then error "Inconsistent time: isLocalTimeSynchronized"
+       else if (t == spcStartTime (pointSpecs p)) || (t' == t)
+            then return True
+            else do leaving <- liftIOUnsafe $ readIORef (queueIsLeaving q)
+                    if (leaving && (t == spcStopTime (pointSpecs p)))
+                      then invokeEvent p isLocalTimeEnding
+                      else return False
 
 -- | Run the computation and return a flag indicating whether there was no rollback.
 runTimeWarp :: TimeWarp DIO () -> Event DIO Bool
@@ -911,3 +931,24 @@ sendState pid =
                              lpStateOutputMessageCount = n3,
                              lpStateTransientMessageCount = n4,
                              lpStateRollbackCount = n5 }
+
+-- | Try to leave the simulation.
+--
+-- It enqueues a new event with obligatory synchronization with the global virtual time.
+-- If that event will not be reverted during rollback, then the logical process will
+-- leave the simulation immediately after approaching the final modeling time without
+-- synchronization with the global virtual time anymore if it has no unacknowledged
+-- sent messages.
+--
+-- It makes sense to use this action if logical processes can enter and leave your long-running
+-- distributed simulation by demand.
+--
+leaveSimulation :: Event DIO ()
+leaveSimulation =
+  Event $ \p ->
+  do let q = runEventQueue $ pointRun p
+         t = pointTime p
+     invokeEvent p $
+       enqueueEventIO t $
+       Event $ \p ->
+       liftIOUnsafe $ writeIORef (queueIsLeaving q) True

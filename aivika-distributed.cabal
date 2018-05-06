@@ -1,5 +1,5 @@
 name:            aivika-distributed
-version:         1.3
+version:         1.4
 synopsis:        Parallel distributed discrete event simulation module for the Aivika library
 description:
     This package extends the aivika-transformers [1] package and allows running parallel distributed simulations.
@@ -83,6 +83,7 @@ library
     exposed-modules: Simulation.Aivika.Distributed
                      Simulation.Aivika.Distributed.Optimistic
                      Simulation.Aivika.Distributed.Optimistic.DIO
+                     Simulation.Aivika.Distributed.Optimistic.Event
                      Simulation.Aivika.Distributed.Optimistic.Guard
                      Simulation.Aivika.Distributed.Optimistic.Generator
                      Simulation.Aivika.Distributed.Optimistic.QueueStrategy
