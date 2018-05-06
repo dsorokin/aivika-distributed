@@ -1,4 +1,11 @@
 
+Version 1.4
+-----
+
+* Added the leaveSimulation function that allows leaving the simulation prematurely.
+  It was made in addition to an ability for new logical processes to enter the already 
+  running simulation.
+
 Version 1.3
 -----
 
