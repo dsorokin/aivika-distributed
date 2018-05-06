@@ -8,7 +8,8 @@ Version 1.4
   
 * Added the dioProcessDisconnectingEnabled flag to allow logical processes to disconnect
   when the monitoring is enabled, but the time server strategy implies the unregistering of
-  disconnected logical processes.
+  disconnected logical processes. But then none process can continue sending messages
+  to the disconnected process.
 
 Version 1.3
 -----
