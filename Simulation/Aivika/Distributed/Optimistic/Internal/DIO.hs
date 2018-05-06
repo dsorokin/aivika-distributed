@@ -92,7 +92,7 @@ data DIOParams =
               dioProcessMonitoringDelay :: Int,
               -- ^ The delay in microseconds which must be applied for monitoring every remote process.
               dioProcessReconnectingEnabled :: Bool,
-              -- ^ Whether the automatic reconnecting to processes is enabled when enabled monitoring (if 'dioProcessMonitoringEnabled' is 'True')
+              -- ^ Whether the automatic reconnecting to processes is enabled when the monitoring is enabled
               dioProcessReconnectingDelay :: Int,
               -- ^ The delay in microseconds before reconnecting to the remote process
               dioKeepAliveInterval :: Int,
@@ -106,7 +106,7 @@ data DIOParams =
               dioStrategy :: DIOStrategy,
               -- ^ The logical process strategy
               dioProcessDisconnectingEnabled :: Bool
-              -- ^ Whether the process disconnecting is enabled (only if the 'dioProcessReconnectingEnabled' is 'False')
+              -- ^ Whether the process disconnecting is enabled when the monitoring is enabled but the reconnecting is disabled
             } deriving (Eq, Ord, Show, Typeable, Generic)
 
 instance Binary DIOParams
