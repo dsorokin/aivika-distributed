@@ -13,6 +13,7 @@
 module Simulation.Aivika.Distributed.Optimistic
        (-- * Modules
         module Simulation.Aivika.Distributed.Optimistic.DIO,
+        module Simulation.Aivika.Distributed.Optimistic.Event,
         module Simulation.Aivika.Distributed.Optimistic.Guard,
         module Simulation.Aivika.Distributed.Optimistic.Generator,
         module Simulation.Aivika.Distributed.Optimistic.Message,
@@ -23,6 +24,7 @@ module Simulation.Aivika.Distributed.Optimistic
         module Simulation.Aivika.Distributed.Optimistic.TimeServer) where
 
 import Simulation.Aivika.Distributed.Optimistic.DIO
+import Simulation.Aivika.Distributed.Optimistic.Event
 import Simulation.Aivika.Distributed.Optimistic.Guard
 import Simulation.Aivika.Distributed.Optimistic.Generator
 import Simulation.Aivika.Distributed.Optimistic.Message
