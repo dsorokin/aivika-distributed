@@ -28,12 +28,15 @@ description:
     Regarding the speed of simulation, the recent rough estimation is as follows. This estimation may change from 
     version to version. For example, in version 1.0 the rollback log was rewritten, which had a significant effect.
     .
-    The distributed simulation module is slower up to 8-15 times in comparison with the sequential aivika [2] simulation 
-    library using the equivalent sequential models. The lower estimation in 8 times is likely to correspond to complex 
-    models. The upper estimation in 15 times will probably correspond to quite simple event-oriented and process-oriented 
-    models, where the sequential module can be exceptionally fast. At the same time, the message passing between 
-    the logical processes can dramatically decrease the speed of distributed simulation, especially if the messages cause 
-    rollbacks. Thus, much depends on the distributed model itself.
+    When simulating sequential models, the speed of single logical process of the distributed module in comparison with 
+    the sequential aivika [2] module varies and depends essentially on the number of 
+    simultaneously processed discrete events, or the number of simultaneously running discontinuous processes, 
+    which is very close. If there are many simultaneous events, then the distributed module can be slower in 4-5 times only. 
+    The more simultaneous events are defined in the model, the less is a gap in the speed between modules.
+    But if the simultaneous events are rare, then the distributed module can be slower even in 15 times, 
+    where the sequential module can be exceptionally fast. At the same time, the message passing between the logical 
+    processes can dramatically decrease the speed of distributed simulation, especially if the messages cause rollbacks. 
+    Then it makes sense to define the time horizon parameter. Thus, much depends on the distributed model itself.
     .
     When residing the logical processes in a computer with multi-core processor, you should follow the next recommendations. 
     You should reserve at least 1 core for each logical process, or even reserve 2 cores if the logical process extensively 
