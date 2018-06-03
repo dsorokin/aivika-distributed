@@ -100,10 +100,12 @@ newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
 
 -- | Return the input message queue size.
 inputMessageQueueSize :: InputMessageQueue -> IO Int
+{-# INLINE inputMessageQueueSize #-}
 inputMessageQueueSize = vectorCount . inputMessages
 
 -- | Return the reversion count.
 inputMessageQueueVersion :: InputMessageQueue -> IO Int
+{-# INLINE inputMessageQueueVersion #-}
 inputMessageQueueVersion = readIORef . inputMessageVersionRef
 
 -- | Return a complement.

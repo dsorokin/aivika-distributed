@@ -107,6 +107,7 @@ newTransientMessageQueue =
 
 -- | Get the transient message queue size.
 transientMessageQueueSize :: TransientMessageQueue -> IO Int
+{-# INLINE transientMessageQueueSize #-}
 transientMessageQueueSize q =
   fmap M.size $ readIORef (queueTransientMessages q)
 

@@ -42,6 +42,7 @@ newChannel =
 
 -- | Test quickly whether the channel is empty.
 channelEmpty :: Channel a -> IO Bool
+{-# INLINE channelEmpty #-}
 channelEmpty ch =
   readIORef (channelListEmptyIO ch)
 

@@ -58,6 +58,7 @@ newOutputMessageQueue transient =
 
 -- | Return the output message queue size.
 outputMessageQueueSize :: OutputMessageQueue -> IO Int
+{-# INLINE outputMessageQueueSize #-}
 outputMessageQueueSize = DLL.listCount . outputMessages
 
 -- | Send the message.

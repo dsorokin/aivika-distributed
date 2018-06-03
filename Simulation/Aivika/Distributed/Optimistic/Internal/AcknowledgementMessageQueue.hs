@@ -51,6 +51,7 @@ newAcknowledgementMessageQueue =
 
 -- | Return the acknowledgement message queue size.
 acknowledgementMessageQueueSize :: AcknowledgementMessageQueue -> IO Int
+{-# INLINE acknowledgementMessageQueueSize #-}
 acknowledgementMessageQueueSize = vectorCount . acknowledgementMessages
 
 -- | Return a complement.
