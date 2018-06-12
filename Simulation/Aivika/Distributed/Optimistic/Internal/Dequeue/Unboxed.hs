@@ -24,9 +24,10 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue.Unboxed
         dequeueBinarySearch,
         dequeueFirst,
         dequeueLast,
+        dequeueInsert,
         dequeueDeleteFirst,
         dequeueDeleteLast,
-        dequeueInsert,
+        dequeueDeleteAt,
         freezeDequeue) where 
 
 import qualified Data.Vector.Unboxed as V
@@ -212,6 +213,36 @@ dequeueInsert dequeue index item =
                let start' = (start - 1 + capacity) `mod` capacity
                MV.write array ((start' + index) `mod` capacity) item
                start' `seq` writeIORef (dequeueStartRef dequeue) start'
+     count' `seq` writeIORef (dequeueCountRef dequeue) count'
+     
+-- | Delete the element at the specified index.
+dequeueDeleteAt :: MV.Unbox a => Dequeue a -> Int -> IO ()
+dequeueDeleteAt dequeue index =
+  do count <- readIORef (dequeueCountRef dequeue)
+     when (index < 0) $
+       error $
+       "Index cannot be " ++
+       "negative: dequeueDeleteAt."
+     when (index >= count) $
+       error $
+       "Index must be less " ++
+       "than the count: dequeueDeleteAt."
+     array <- readIORef (dequeueArrayRef dequeue)
+     start <- readIORef (dequeueStartRef dequeue)
+     count <- readIORef (dequeueCountRef dequeue)
+     capacity <- readIORef (dequeueCapacityRef dequeue)
+     if index >= count `div` 2
+       then do forM_ [index, index + 1 .. count - 2] $ \i ->
+                 do x <- MV.read array ((start + i + 1) `mod` capacity)
+                    MV.write array ((start + i) `mod` capacity) x
+               -- MV.write array ((start + count - 1) `mod` capacity) undefined
+       else do forM_ [index, index - 1 .. 1] $ \i ->
+                 do x <- MV.read array ((start + i - 1) `mod` capacity)
+                    MV.write array ((start + i) `mod` capacity) x
+               let start' = (start + 1) `mod` capacity
+               -- MV.write array start undefined
+               start' `seq` writeIORef (dequeueStartRef dequeue) start'
+     let count' = count - 1
      count' `seq` writeIORef (dequeueCountRef dequeue) count'
      
 -- | Get the first element.
