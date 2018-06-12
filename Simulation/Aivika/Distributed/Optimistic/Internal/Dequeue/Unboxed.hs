@@ -38,7 +38,6 @@ import Control.Monad
 data Dequeue a = Dequeue { dequeueArrayRef :: IORef (MV.IOVector a),
                            dequeueCountRef :: IORef Int,
                            dequeueStartRef :: IORef Int,
-                           dequeueEndRef   :: IORef Int,
                            dequeueCapacityRef :: IORef Int }
 
 -- | Create a new dequeue.
@@ -49,12 +48,10 @@ newDequeue =
      arrayRef <- newIORef array
      countRef <- newIORef 0
      startRef <- newIORef 0
-     endRef   <- newIORef 0
      capacityRef <- newIORef 4
      return Dequeue { dequeueArrayRef = arrayRef,
                       dequeueCountRef = countRef,
                       dequeueStartRef = startRef,
-                      dequeueEndRef   = endRef,
                       dequeueCapacityRef = capacityRef }
 
 -- | Copy the dequeue.
@@ -69,7 +66,6 @@ copyDequeue dequeue =
      arrayRef' <- newIORef array'
      countRef' <- newIORef count
      startRef' <- newIORef 0
-     endRef'   <- newIORef 0
      capacityRef' <- newIORef count
      forM_ [0 .. count - 1] $ \i ->
        do x <- MV.read array ((i + start) `mod` capacity)
@@ -77,7 +73,6 @@ copyDequeue dequeue =
      return Dequeue { dequeueArrayRef = arrayRef',
                       dequeueCountRef = countRef',
                       dequeueStartRef = startRef',
-                      dequeueEndRef   = endRef',
                       dequeueCapacityRef = capacityRef' }
 
 -- | Ensure that the dequeue has the specified capacity.
@@ -96,7 +91,6 @@ dequeueEnsureCapacity dequeue capacity =
                MV.write array'' i x
           writeIORef (dequeueArrayRef dequeue) array''
           writeIORef (dequeueStartRef dequeue) 0
-          writeIORef (dequeueEndRef dequeue) count'
           writeIORef (dequeueCapacityRef dequeue) capacity''
           
 -- | Return the element count.
@@ -117,14 +111,13 @@ appendDequeue :: MV.Unbox a => Dequeue a -> a -> IO ()
 appendDequeue dequeue item =
   do count <- readIORef (dequeueCountRef dequeue)
      dequeueEnsureCapacity dequeue (count + 1)
-     end   <- readIORef (dequeueEndRef dequeue)
+     start <- readIORef (dequeueStartRef dequeue)
      array <- readIORef (dequeueArrayRef dequeue)
      capacity <- readIORef (dequeueCapacityRef dequeue)
-     let end'   = (end + 1) `mod` capacity
+     let end    = (start + count) `mod` capacity
          count' = count + 1 
      MV.write array end item
      count' `seq` writeIORef (dequeueCountRef dequeue) count'
-     end' `seq` writeIORef (dequeueEndRef dequeue) end'
           
 -- | Add the specified element to the beginning of the dequeue.
 prependDequeue :: MV.Unbox a => Dequeue a -> a -> IO ()          
@@ -202,9 +195,10 @@ dequeueLast :: MV.Unbox a => Dequeue a -> IO a
 {-# INLINE dequeueLast #-}
 dequeueLast dequeue =
   do array <- readIORef (dequeueArrayRef dequeue)
-     end   <- readIORef (dequeueEndRef dequeue)
+     start <- readIORef (dequeueStartRef dequeue)
+     count <- readIORef (dequeueCountRef dequeue)
      capacity <- readIORef (dequeueCapacityRef dequeue)
-     MV.read array ((end - 1 + capacity) `mod` capacity)
+     MV.read array ((start + count - 1) `mod` capacity)
      
 -- | Delete the last element.
 dequeueDeleteLast :: MV.Unbox a => Dequeue a -> IO ()
@@ -215,13 +209,12 @@ dequeueDeleteLast dequeue =
        error $
        "The dequeue cannot be empty: dequeueDeleteLast."
      array <- readIORef (dequeueArrayRef dequeue)
-     end   <- readIORef (dequeueEndRef dequeue)
+     start <- readIORef (dequeueStartRef dequeue)
      capacity <- readIORef (dequeueCapacityRef dequeue)
-     let end'   = (end - 1 + capacity) `mod` capacity
+     let end'   = (start + count - 1) `mod` capacity
          count' = count - 1
      -- end' `seq` MV.write array end' undefined
      count' `seq` writeIORef (dequeueCountRef dequeue) count'
-     writeIORef (dequeueEndRef dequeue) end'
      
 -- | Delete the first element.
 dequeueDeleteFirst :: MV.Unbox a => Dequeue a -> IO ()
