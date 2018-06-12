@@ -1,4 +1,9 @@
 
+Version 1.5
+-----
+
+* Refactoring the queues.
+
 Version 1.4
 -----
 
