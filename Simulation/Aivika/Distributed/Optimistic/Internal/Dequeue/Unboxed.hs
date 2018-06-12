@@ -26,6 +26,7 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue.Unboxed
         dequeueLast,
         dequeueDeleteFirst,
         dequeueDeleteLast,
+        dequeueInsert,
         freezeDequeue) where 
 
 import qualified Data.Vector.Unboxed as V
@@ -181,6 +182,37 @@ freezeDequeue dequeue =
   do dequeue' <- copyDequeue dequeue
      array    <- readIORef (dequeueArrayRef dequeue')
      V.freeze array
+     
+-- | Insert the element in the dequeue at the specified index.
+dequeueInsert :: MV.Unbox a => Dequeue a -> Int -> a -> IO ()          
+dequeueInsert dequeue index item =
+  do count <- readIORef (dequeueCountRef dequeue)
+     when (index < 0) $
+       error $
+       "Index cannot be " ++
+       "negative: dequeueInsert."
+     when (index > count) $
+       error $
+       "Index cannot be greater " ++
+       "than the count: dequeueInsert."
+     let count' = count + 1
+     dequeueEnsureCapacity dequeue count'
+     array <- readIORef (dequeueArrayRef dequeue)
+     start <- readIORef (dequeueStartRef dequeue)
+     count <- readIORef (dequeueCountRef dequeue)
+     capacity <- readIORef (dequeueCapacityRef dequeue)
+     if index >= count `div` 2
+       then do forM_ [count, count - 1 .. index + 1] $ \i ->
+                 do x <- MV.read array ((start + i - 1) `mod` capacity)
+                    MV.write array ((start + i) `mod` capacity) x
+               MV.write array ((start + index) `mod` capacity) item
+       else do forM_ [-1, 0 .. index - 2] $ \i ->
+                 do x <- MV.read array ((start + i + 1) `mod` capacity)
+                    MV.write array ((start + i + capacity) `mod` capacity) x
+               let start' = (start - 1 + capacity) `mod` capacity
+               MV.write array ((start' + index) `mod` capacity) item
+               start' `seq` writeIORef (dequeueStartRef dequeue) start'
+     count' `seq` writeIORef (dequeueCountRef dequeue) count'
      
 -- | Get the first element.
 dequeueFirst :: MV.Unbox a => Dequeue a -> IO a
