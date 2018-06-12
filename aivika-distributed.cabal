@@ -101,6 +101,8 @@ library
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.AcknowledgementMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.Channel
                      Simulation.Aivika.Distributed.Optimistic.Internal.ConnectionManager
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue
+                     Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue.Unboxed
                      Simulation.Aivika.Distributed.Optimistic.Internal.DIO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Event
                      Simulation.Aivika.Distributed.Optimistic.Internal.Expect
@@ -129,6 +131,7 @@ library
                      containers >= 0.4.0.0,
                      exceptions >= 0.8.0.2,
                      distributed-process >= 0.6.1,
+                     vector >= 0.10.0.1,
                      aivika >= 5.3.1,
                      aivika-transformers >= 5.3.1
 

@@ -18,7 +18,8 @@ module Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
         logSize) where
 
 import Data.IORef
-import Data.Array.IO.Safe
+import qualified Data.Vector.Mutable as V
+import qualified Data.Vector.Unboxed.Mutable as UV
 
 import Control.Monad
 import Control.Monad.Trans
@@ -43,9 +44,9 @@ data UndoableItemChunk =
                       -- ^ the start item index in the chunk.
                       chunkItemEnd :: IORef Int,
                       -- ^ the end item index in the chunk.
-                      chunkItemTimes :: IOUArray Int Double,
+                      chunkItemTimes :: UV.IOVector Double,
                       -- ^ the times at which the operations had occurred.
-                      chunkItemUndo :: IOArray Int (DIO ())
+                      chunkItemUndo :: V.IOVector (DIO ())
                       -- ^ the undo operations.
                     }
 
@@ -74,7 +75,7 @@ writeLog log h =
                     DLL.listAddLast (logItemChunks log) ch
             else do ch <- DLL.listLast (logItemChunks log)
                     e  <- readIORef (chunkItemEnd ch)
-                    t0 <- readArray (chunkItemTimes ch) (e - 1)
+                    t0 <- UV.read (chunkItemTimes ch) (e - 1)
                     when (t < t0) $
                       error $
                       "The logging data are not sorted by time (" ++
@@ -84,8 +85,8 @@ writeLog log h =
                       then do ch <- newItemChunk t h
                               DLL.listAddLast (logItemChunks log) ch
                       else do let e' = e + 1
-                              writeArray (chunkItemTimes ch) e t
-                              writeArray (chunkItemUndo ch) e h
+                              UV.write (chunkItemTimes ch) e t
+                              V.write (chunkItemUndo ch) e h
                               e' `seq` writeIORef (chunkItemEnd ch) e'
 
 -- | Rollback the log till the specified time either including that one or not.
@@ -106,10 +107,10 @@ rollbackLog log t including =
                          then do liftIOUnsafe $ DLL.listRemoveLast (logItemChunks log)
                                  loop
                          else do let e' = e - 1
-                                 t0 <- e' `seq` liftIOUnsafe $ readArray (chunkItemTimes ch) e'
+                                 t0 <- e' `seq` liftIOUnsafe $ UV.read (chunkItemTimes ch) e'
                                  when ((t < t0) || (including && t == t0)) $
-                                   do h <- liftIOUnsafe $ readArray (chunkItemUndo ch) e'
-                                      liftIOUnsafe $ writeArray (chunkItemUndo ch) e' undefined
+                                   do h <- liftIOUnsafe $ V.read (chunkItemUndo ch) e'
+                                      liftIOUnsafe $ V.write (chunkItemUndo ch) e' undefined
                                       liftIOUnsafe $ writeIORef (chunkItemEnd ch) e'
                                       h
                                       inner e'
@@ -123,17 +124,17 @@ reduceLog log t =
      unless f $
        do ch <- DLL.listFirst (logItemChunks log)
           e  <- readIORef (chunkItemEnd ch)
-          t0 <- readArray (chunkItemTimes ch) (e - 1)
+          t0 <- UV.read (chunkItemTimes ch) (e - 1)
           if t0 < t
             then do DLL.listRemoveFirst (logItemChunks log)
                     reduceLog log t
             else do let loop s =
                           if s == e
                           then error "The log is corrupted: reduceLog"
-                          else do t0 <- readArray (chunkItemTimes ch) s
+                          else do t0 <- UV.read (chunkItemTimes ch) s
                                   when (t0 < t) $
                                     do let s' = s + 1
-                                       writeArray (chunkItemUndo ch) s undefined
+                                       V.write (chunkItemUndo ch) s undefined
                                        s' `seq` writeIORef (chunkItemStart ch) s'
                                        loop s'
                     s <- readIORef (chunkItemStart ch)
@@ -157,12 +158,12 @@ logSize log =
 newItemChunk :: Double -> DIO () -> IO UndoableItemChunk
 {-# INLINABLE newItemChunk #-}
 newItemChunk t h =
-  do times <- newArray_ (0, chunkItemCapacity - 1)
-     undo  <- newArray_ (0, chunkItemCapacity - 1)
+  do times <- UV.new chunkItemCapacity
+     undo  <- V.new chunkItemCapacity
      start <- newIORef 0
      end   <- newIORef 1
-     writeArray times 0 t
-     writeArray undo 0 h
+     UV.write times 0 t
+     V.write undo 0 h
      return UndoableItemChunk { chunkItemStart = start,
                                 chunkItemEnd = end,
                                 chunkItemTimes = times,
