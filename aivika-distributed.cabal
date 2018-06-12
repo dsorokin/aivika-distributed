@@ -101,8 +101,6 @@ library
     other-modules:   Simulation.Aivika.Distributed.Optimistic.Internal.AcknowledgementMessageQueue
                      Simulation.Aivika.Distributed.Optimistic.Internal.Channel
                      Simulation.Aivika.Distributed.Optimistic.Internal.ConnectionManager
-                     Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue
-                     Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue.Unboxed
                      Simulation.Aivika.Distributed.Optimistic.Internal.DIO
                      Simulation.Aivika.Distributed.Optimistic.Internal.Event
                      Simulation.Aivika.Distributed.Optimistic.Internal.Expect
