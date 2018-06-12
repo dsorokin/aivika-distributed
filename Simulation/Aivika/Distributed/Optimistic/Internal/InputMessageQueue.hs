@@ -42,6 +42,7 @@ import Simulation.Aivika.Distributed.Optimistic.Internal.UndoableLog
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
 import Simulation.Aivika.Distributed.Optimistic.Internal.TimeWarp
+import Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the input message queue.
@@ -56,7 +57,7 @@ data InputMessageQueue =
                       -- ^ Rollback the event time.
                       inputMessageSource :: SignalSource DIO Message,
                       -- ^ The message source.
-                      inputMessages :: Vector InputMessageQueueItem,
+                      inputMessages :: Dequeue InputMessageQueueItem,
                       -- ^ The input messages.
                       inputMessageActions :: IORef [Event DIO ()],
                       -- ^ The list of actions to perform.
@@ -85,7 +86,7 @@ newInputMessageQueue :: UndoableLog
                         -- ^ rollback the event time
                         -> DIO InputMessageQueue
 newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
-  do ms <- liftIOUnsafe newVector
+  do ms <- liftIOUnsafe newDequeue
      r  <- liftIOUnsafe $ newIORef []
      s  <- newSignalSource0
      v  <- liftIOUnsafe $ newIORef 0
@@ -101,7 +102,7 @@ newInputMessageQueue log rollbackPre rollbackPost rollbackTime =
 -- | Return the input message queue size.
 inputMessageQueueSize :: InputMessageQueue -> IO Int
 {-# INLINE inputMessageQueueSize #-}
-inputMessageQueueSize = vectorCount . inputMessages
+inputMessageQueueSize = dequeueCount . inputMessages
 
 -- | Return the reversion count.
 inputMessageQueueVersion :: InputMessageQueue -> IO Int
@@ -132,7 +133,7 @@ enqueueMessage q m =
          do -- found the anti-message at the specified index
             when (t <= t0) $
               liftIOUnsafe $ modifyIORef' (inputMessageVersionRef q) (+ 1)
-            item <- liftIOUnsafe $ readVector (inputMessages q) i
+            item <- liftIOUnsafe $ readDequeue (inputMessages q) i
             f <- liftIOUnsafe $ readIORef (itemProcessed item)
             if f
               then do let p' = pastPoint t p
@@ -230,7 +231,7 @@ leftMessageIndex :: InputMessageQueue -> Double -> Int -> IO Int
 leftMessageIndex q t i
   | i == 0    = return 0
   | otherwise = do let i' = i - 1
-                   item' <- readVector (inputMessages q) i'
+                   item' <- readDequeue (inputMessages q) i'
                    let m' = itemMessage item'
                        t' = messageReceiveTime m'
                    if t' > t
@@ -250,7 +251,7 @@ findAntiMessage q m =
        else let loop i
                   | i < 0     = return (Just $ complement (right + 1))
                   | otherwise =
-                    do item <- readVector (inputMessages q) i
+                    do item <- readDequeue (inputMessages q) i
                        let m' = itemMessage item
                            t  = messageReceiveTime m
                            t' = messageReceiveTime m'
@@ -268,20 +269,20 @@ findAntiMessage q m =
 -- | Annihilate a message at the specified index.
 annihilateMessage :: InputMessageQueue -> Message -> Int -> IO ()
 annihilateMessage q m i =
-  do item <- readVector (inputMessages q) i
+  do item <- readDequeue (inputMessages q) i
      let m' = itemMessage item
      unless (antiMessages m m') $
        error "Cannot annihilate another message: annihilateMessage"
      f <- readIORef (itemProcessed item)
      when f $
        error "Cannot annihilate the processed message: annihilateMessage"
-     vectorDeleteAt (inputMessages q) i
+     dequeueDeleteAt (inputMessages q) i
      writeIORef (itemAnnihilated item) True
 
 -- | Activate a message at the specified index.
 activateMessage :: InputMessageQueue -> Int -> Event DIO ()
 activateMessage q i =
-  do item <- liftIOUnsafe $ readVector (inputMessages q) i
+  do item <- liftIOUnsafe $ readDequeue (inputMessages q) i
      let m    = itemMessage item
          loop =
            do f <- liftIOUnsafe $ readIORef (itemAnnihilated item)
@@ -309,21 +310,21 @@ insertMessage :: InputMessageQueue -> Message -> Int -> IO ()
 --      let item = InputMessageQueueItem m r1 r2
 --      vectorInsert (inputMessages q) i item
 insertMessage q m i =
-  do n <- vectorCount (inputMessages q)
+  do n <- dequeueCount (inputMessages q)
      when (i < n) $
-       do item0 <- readVector (inputMessages q) i
+       do item0 <- readDequeue (inputMessages q) i
           let m0 = itemMessage item0
           unless (messageReceiveTime m < messageReceiveTime m0) $
             error "Error inserting a new input message (check before): insertMessage"
      when (i > 0) $
-       do item0 <- readVector (inputMessages q) (i - 1)
+       do item0 <- readDequeue (inputMessages q) (i - 1)
           let m0 = itemMessage item0
           unless (messageReceiveTime m >= messageReceiveTime m0) $
             error "Error inserting a new input message (check after): insertMessage"
      r1 <- newIORef False
      r2 <- newIORef False
      let item = InputMessageQueueItem m r1 r2
-     vectorInsert (inputMessages q) i item
+     dequeueInsert (inputMessages q) i item
 
 -- | Search for the rightmost message index.
 lookupRightMessageIndex' :: InputMessageQueue -> Double -> Int -> Int -> IO Int
@@ -332,7 +333,7 @@ lookupRightMessageIndex' q t left right =
   then return $ complement (right + 1)
   else  
     do let index = ((left + 1) + right) `div` 2
-       item <- readVector (inputMessages q) index
+       item <- readDequeue (inputMessages q) index
        let m' = itemMessage item
            t' = messageReceiveTime m'
        if left == right
@@ -354,7 +355,7 @@ lookupLeftMessageIndex' q t left right =
   then return $ complement left
   else  
     do let index = (left + right) `div` 2
-       item <- readVector (inputMessages q) index
+       item <- readDequeue (inputMessages q) index
        let m' = itemMessage item
            t' = messageReceiveTime m'
        if left == right
@@ -372,40 +373,35 @@ lookupLeftMessageIndex' q t left right =
 -- | Search for the rightmost message index.
 lookupRightMessageIndex :: InputMessageQueue -> Double -> IO Int
 lookupRightMessageIndex q t =
-  do n <- vectorCount (inputMessages q)
+  do n <- dequeueCount (inputMessages q)
      lookupRightMessageIndex' q t 0 (n - 1)
  
 -- | Search for the leftmost message index.
 lookupLeftMessageIndex :: InputMessageQueue -> Double -> IO Int
 lookupLeftMessageIndex q t =
-  do n <- vectorCount (inputMessages q)
+  do n <- dequeueCount (inputMessages q)
      lookupLeftMessageIndex' q t 0 (n - 1)
 
 -- | Reduce the input messages till the specified time.
 reduceInputMessages :: InputMessageQueue -> Double -> IO ()
 reduceInputMessages q t =
-  do count <- vectorCount (inputMessages q)
-     len   <- loop count 0
-     when (len > 0) $
-       vectorDeleteRange (inputMessages q) 0 len
-       where
-         loop n i
-           | i >= n    = return i
-           | otherwise = do item <- readVector (inputMessages q) i
-                            let m = itemMessage item
-                            if messageReceiveTime m < t
-                              then loop n (i + 1)
-                              else return i
+  do f <- dequeueNull (inputMessages q)
+     unless f $
+       do item <- dequeueFirst (inputMessages q)
+          let m = itemMessage item
+          when (messageReceiveTime m < t) $
+            do dequeueDeleteFirst (inputMessages q)
+               reduceInputMessages q t
 
 -- | Filter the input messages using the specified predicate.
 filterInputMessages :: (Message -> Bool) -> InputMessageQueue -> IO [Message]
 filterInputMessages pred q =
-  do count <- vectorCount (inputMessages q)
+  do count <- dequeueCount (inputMessages q)
      loop count 0 []
        where
          loop n i acc
            | i >= n    = return (reverse acc)
-           | otherwise = do item <- readVector (inputMessages q) i
+           | otherwise = do item <- readDequeue (inputMessages q) i
                             let m = itemMessage item
                             if pred m
                               then loop n (i + 1) (m : acc)
