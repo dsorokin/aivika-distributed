@@ -26,8 +26,6 @@ import Control.Monad
 import Control.Monad.Trans
 import qualified Control.Distributed.Process as DP
 
-import qualified Simulation.Aivika.DoubleLinkedList as DLL
-
 import Simulation.Aivika.Trans.Comp
 import Simulation.Aivika.Trans.Simulation
 import Simulation.Aivika.Trans.Event
@@ -35,13 +33,14 @@ import Simulation.Aivika.Trans.Event
 import Simulation.Aivika.Distributed.Optimistic.Internal.Message
 import Simulation.Aivika.Distributed.Optimistic.Internal.DIO
 import Simulation.Aivika.Distributed.Optimistic.Internal.IO
+import Simulation.Aivika.Distributed.Optimistic.Internal.Dequeue
 import Simulation.Aivika.Distributed.Optimistic.DIO
 
 -- | Specifies the output message queue.
 data OutputMessageQueue =
   OutputMessageQueue { outputEnqueueTransientMessage :: Message -> IO (),
                        -- ^ Enqueue the transient message.
-                       outputMessages :: DLL.DoubleLinkedList Message,
+                       outputMessages :: Dequeue Message,
                        -- ^ The output messages.
                        outputMessageSequenceNo :: IORef Word64
                        -- ^ The next sequence number.
@@ -50,7 +49,7 @@ data OutputMessageQueue =
 -- | Create a new output message queue.
 newOutputMessageQueue :: (Message -> IO ()) -> DIO OutputMessageQueue
 newOutputMessageQueue transient =
-  do ms <- liftIOUnsafe DLL.newList
+  do ms <- liftIOUnsafe newDequeue
      rn <- liftIOUnsafe $ newIORef 0
      return OutputMessageQueue { outputEnqueueTransientMessage = transient,
                                  outputMessages = ms,
@@ -59,7 +58,7 @@ newOutputMessageQueue transient =
 -- | Return the output message queue size.
 outputMessageQueueSize :: OutputMessageQueue -> IO Int
 {-# INLINE outputMessageQueueSize #-}
-outputMessageQueueSize = DLL.listCount . outputMessages
+outputMessageQueueSize = dequeueCount . outputMessages
 
 -- | Send the message.
 sendMessage :: OutputMessageQueue -> Message -> DIO ()
@@ -68,14 +67,14 @@ sendMessage q m =
        error "The Send time cannot be greater than the Receive message time: sendMessage"
      when (messageAntiToggle m) $
        error "Cannot directly send the anti-message: sendMessage"
-     f <- liftIOUnsafe $ DLL.listNull (outputMessages q)
+     f <- liftIOUnsafe $ dequeueNull (outputMessages q)
      unless f $
-       do m' <- liftIOUnsafe $ DLL.listLast (outputMessages q)
+       do m' <- liftIOUnsafe $ dequeueLast (outputMessages q)
           when (messageSendTime m' > messageSendTime m) $
             error "A new output message comes from the past: sendMessage."
      liftIOUnsafe $ outputEnqueueTransientMessage q m
      deliverMessage m
-     liftIOUnsafe $ DLL.listAddLast (outputMessages q) m
+     liftIOUnsafe $ appendDequeue (outputMessages q) m
 
 -- | Rollback the messages till the specified time either including that one or not.
 rollbackOutputMessages :: OutputMessageQueue -> Double -> Bool -> DIO ()
@@ -92,28 +91,26 @@ extractMessagesToRollback :: OutputMessageQueue -> Double -> Bool -> IO [Message
 extractMessagesToRollback q t including = loop []
   where
     loop acc =
-      do f <- DLL.listNull (outputMessages q)
+      do f <- dequeueNull (outputMessages q)
          if f
            then return acc
-           else do m <- DLL.listLast (outputMessages q)
+           else do m <- dequeueLast (outputMessages q)
                    if (not including) && (messageSendTime m == t)
                      then return acc
                      else if messageSendTime m < t
                           then return acc
-                          else do DLL.listRemoveLast (outputMessages q)
+                          else do dequeueDeleteLast (outputMessages q)
                                   loop (m : acc)
 
 -- | Reduce the output messages till the specified time.
 reduceOutputMessages :: OutputMessageQueue -> Double -> IO ()
-reduceOutputMessages q t = loop
-  where
-    loop =
-      do f <- DLL.listNull (outputMessages q)
-         unless f $
-           do m <- DLL.listFirst (outputMessages q)
-              when (messageSendTime m < t) $
-                do DLL.listRemoveFirst (outputMessages q)
-                   loop
+reduceOutputMessages q t =
+  do f <- dequeueNull (outputMessages q)
+     unless f $
+       do m <- dequeueFirst (outputMessages q)
+          when (messageSendTime m < t) $
+            do dequeueDeleteFirst (outputMessages q)
+               reduceOutputMessages q t
 
 -- | Generate a next message sequence number.
 generateMessageSequenceNo :: OutputMessageQueue -> IO Word64
