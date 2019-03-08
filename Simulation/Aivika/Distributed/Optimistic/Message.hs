@@ -39,12 +39,14 @@ import Simulation.Aivika.Distributed.Optimistic.Ref.Base
 
 -- | Send a message to the specified remote process with the current receive time.
 sendMessage :: forall a. Serializable a => ProcessId -> a -> Event DIO ()
+{-# INLINABLE sendMessage #-}
 sendMessage pid a =
   do t <- liftDynamics time
      enqueueMessage pid t a 
 
 -- | Send a message to the specified remote process with the given receive time.
 enqueueMessage :: forall a. Serializable a => ProcessId -> Double -> a -> Event DIO ()
+{-# INLINABLE enqueueMessage #-}
 enqueueMessage pid t a =
   Event $ \p ->
   do let queue       = queueOutputMessages $
@@ -68,6 +70,7 @@ enqueueMessage pid t a =
           
 -- | The signal triggered when the remote message of the specified type has come.
 messageReceived :: forall a. Serializable a => Signal DIO a
+{-# INLINABLE messageReceived #-}
 messageReceived =
   Signal { handleSignal = \h ->
             Event $ \p ->
