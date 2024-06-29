@@ -1,3 +1,7 @@
+The project **has been moved** to https://gitflic.ru/project/dsorokin/aivika-distributed
+
+**The old web site URL has another owner now**
+
 Parallel distributed discrete event simulation module for the Aivika library
 
 The represented [aivika-distributed](http://hackage.haskell.org/package/aivika-distributed) package extends
@@ -22,7 +26,6 @@ used with a multi-core computer, or computers connected in the distributed clust
 There are additional packages that allow you to run the distributed simulation experiments by using
 the Monte-Carlo method. They allow you to save the simulation results in SQL databases and then generate a report 
 or a set of reports consisting of HTML pages with charts, histograms, links to CSV tables, summary statistics etc.
-Please consult the [AivikaSoft](http://www.aivikasoft.com) website for more details.
 
 Regarding the speed of simulation, the recent rough estimation is as follows. This estimation may change from 
 version to version. For example, in version 1.0 the rollback log was rewritten, which had a significant effect.
